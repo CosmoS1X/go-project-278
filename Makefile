@@ -1,10 +1,19 @@
-.PHONY: tidy fmt test lint vuln
+.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev vuln
 
 tidy:
 	go mod tidy
 
 fmt:
 	golangci-lint fmt
+
+build:
+	go build -o ./bin/server ./cmd/server
+
+run: build
+	./bin/server
+
+clean:
+	rm -rf ./bin coverage.out
 
 test:
 	go test -v ./...
