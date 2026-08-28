@@ -1,0 +1,34 @@
+.PHONY: tidy fmt test lint vuln
+
+tidy:
+	go mod tidy
+
+fmt:
+	golangci-lint fmt
+
+test:
+	go test -v ./...
+
+test-race:
+	go test -race -v ./...
+
+test-bench:
+	go test -bench=. -benchmem
+
+test-coverage:
+	go test -v -cover -coverprofile=coverage.out ./...
+
+show-coverage:
+	go tool cover -html=coverage.out
+
+lint: fmt
+	golangci-lint run
+
+lint-fix:
+	golangci-lint run --fix
+
+dev:
+	air
+
+vuln:
+	govulncheck ./...

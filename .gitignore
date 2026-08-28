@@ -1,0 +1,5 @@
+/bin/
+/tmp/
+.vscode
+.air.toml
+coverage.out

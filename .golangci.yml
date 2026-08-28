@@ -1,0 +1,56 @@
+version: '2'
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - errcheck
+    - gosec
+    - bodyclose
+    - errorlint
+    - revive
+    - gocritic
+    - goconst
+    - nakedret
+    - nolintlint
+  settings:
+    govet:
+      enable:
+        - shadow
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+  exclusions:
+    presets:
+      - common-false-positives
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      custom-order: true
+      sections:
+        - standard
+        - default
+        - localmodule
+    gofumpt:
+      module-path: code
