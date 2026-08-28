@@ -53,4 +53,4 @@ formatters:
         - default
         - localmodule
     gofumpt:
-      module-path: code
+      module-path: github.com/CosmoS1X/go-project-278
