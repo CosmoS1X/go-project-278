@@ -1,4 +1,16 @@
-.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev vuln
+.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev vuln sqlc-generate migrate-up migrate-down
+
+MIGRATIONS_DIR := db/migrations
+-include .env
+
+sqlc-generate:
+	cd internal/storage/sqlc && sqlc generate
+
+migrate-up:
+	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
+
+migrate-down:
+	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" down
 
 tidy:
 	go mod tidy

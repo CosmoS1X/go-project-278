@@ -3,3 +3,4 @@
 .vscode
 .air.toml
 coverage.out
+.env
