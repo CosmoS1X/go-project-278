@@ -40,6 +40,11 @@ jobs:
       with:
         version: v2.13
 
+    - name: Install goose
+      run: |
+        go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
     - name: Run migrations
       run: make migrate-up
 
