@@ -39,5 +39,5 @@ func run() error {
 
 	router := app.NewRouter(pool, cfg)
 
-	return router.Run()
+	return router.Run(":" + cfg.Port)
 }
