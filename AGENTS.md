@@ -22,17 +22,39 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 | `build`       | go build -o ./bin/server ./cmd/server         |
 | `run`         | собрать и запустить `./bin/server`            |
 | `dev`         | air (hot-reload; .air.toml в gitignore)       |
+| `sqlc-generate` | сгенерировать код sqlc (`cd internal/storage/sqlc && sqlc generate`) |
+| `migrate-up`  | применить миграции goose (`-dir db/migrations`) |
+| `migrate-down`| откатить миграции goose                       |
 | `tidy`, `clean`, `test-race`, `test-coverage`, `show-coverage`, `vuln` | см. Makefile |
 
 Перед завершением задачи обязательно: `make test && make lint`.
 
+## Общие правила
+
+- Исправляй причину, а не следствие.
+
 ## Структура
 
-- `cmd/server/main.go` — точка входа (NewRouter → Run).
-- `internal/app/app.go` — NewRouter(): gin.Logger + gin.Recovery + маршруты.
-- `internal/app/app_test.go` — тесты маршрутов (testify + httptest).
-- При росте: `internal/config`, `internal/storage` (sqlc) и т.п.
-  Точные имена пакетов — согласовать на момент внедрения.
+- `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
+  `app.NewRouter(pool, cfg)` → `router.Run(":" + PORT)`.
+- `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
+  `BASE_SHORT_URL`, `PORT` (default `8080`).
+- `internal/app/app.go` — NewRouter(): gin.Logger + gin.Recovery + маршруты;
+  тонкий слой, только сборка роутера.
+- `internal/app/app_test.go` — тесты маршрутов (testify + httptest) на реальной
+  БД (skip, если нет `DATABASE_URL`).
+- `internal/service/links/` — доменный слой сущности links (пакет `links`):
+  - `handler.go` — HTTP-хендлеры, зависит от интерфейса `Repository`;
+  - `repository.go` — интерфейс `Repository` + реализация на sqlc,
+    sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`;
+  - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`).
+  - Тесты: `handler_test.go` — юнит с фейковым `Repository` (без БД);
+    `repository_test.go` — интеграция на реальной БД.
+- `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
+  схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
+- `db/migrations/` — миграции goose (SQL, последовательная нумерация).
+- Новые сущности — отдельные пакеты `internal/service/<name>` (пакет называется
+  по имени сущности, не `<name>service`).
 
 ## Конвенции
 
@@ -42,11 +64,12 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - Импорты: форматирует gci (std / default / localmodule).
 - Линтер golangci-lint v2 строгий (gosec, errcheck, staticcheck, gocritic,
   revive, ...). `nolint` — только с обоснованием.
+- HTTP-слой зависит от интерфейса `Repository`, не от sqlc напрямую.
 - НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
 
-## Планируемый слой данных (PostgreSQL)
+## Слой данных (PostgreSQL)
 
-- Миграции goose в SQL: последовательная нумерация, каталог согласовать
-  (напр. `db/migrations/`).
-- sqlc: запросы и схема в каталогах через `sqlc.yaml`, генерация командой
-  `sqlc generate`; сгенерированный код не править руками.
+- Миграции goose в SQL: `db/migrations/`, последовательная нумерация.
+- sqlc: конфиг `internal/storage/sqlc/sqlc.yaml`, команда `make sqlc-generate`;
+  сгенерированный код править руками нельзя.
+- В SQL-запросах всегда явно указывать поля, не использовать `*`.
