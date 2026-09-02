@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -22,11 +22,7 @@ func newTestDB(t *testing.T) (*sql.Tx, *config.Config) {
 
 	gin.SetMode(gin.TestMode)
 
-	if _, err := os.Stat("../../.env"); err == nil {
-		if err := godotenv.Load("../../.env"); err != nil {
-			t.Fatalf("load .env: %v", err)
-		}
-	}
+	_ = godotenv.Load(filepath.Join("..", "..", ".env"))
 
 	cfg, err := config.Load()
 	if err != nil {

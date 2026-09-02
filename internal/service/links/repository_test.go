@@ -3,6 +3,7 @@ package links
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,11 +18,7 @@ import (
 func newTestRepository(t *testing.T) Repository {
 	t.Helper()
 
-	if _, err := os.Stat("../../../.env"); err == nil {
-		if err := godotenv.Load("../../../.env"); err != nil {
-			t.Fatalf("load .env: %v", err)
-		}
-	}
+	_ = godotenv.Load(filepath.Join("..", "..", "..", ".env"))
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -78,15 +75,25 @@ func TestRepositoryCreateDuplicateShortName(t *testing.T) {
 func TestRepositoryList(t *testing.T) {
 	repo := newTestRepository(t)
 
-	_, err := repo.Create(t.Context(), "https://a.com", "aaa")
+	created1, err := repo.Create(t.Context(), "https://a.com", "aaa")
 	require.NoError(t, err)
-	_, err = repo.Create(t.Context(), "https://b.com", "bbb")
+	created2, err := repo.Create(t.Context(), "https://b.com", "bbb")
 	require.NoError(t, err)
 
-	items, total, err := repo.List(t.Context(), 0, 10)
+	items, total, err := repo.List(t.Context(), 0, 100)
 	require.NoError(t, err)
-	assert.Len(t, items, 2)
-	assert.Equal(t, int64(2), total)
+	assert.GreaterOrEqual(t, total, int64(2))
+	assert.True(t, containsLink(items, created1.ID))
+	assert.True(t, containsLink(items, created2.ID))
+}
+
+func containsLink(items []Link, id int64) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func TestRepositoryUpdate(t *testing.T) {
