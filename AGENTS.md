@@ -64,6 +64,9 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`, `docs:`.
   Коммиты небольшие и логически раздельные; каждый коммит должен собираться.
 - Тесты рядом с кодом, в том же пакете; `gin.SetMode(gin.TestMode)` в тестах.
+- Интеграционные тесты, работающие с реальной БД, изолировать через транзакции:
+  каждый тест в своей транзакции `Begin()` + `Rollback()` в `t.Cleanup`
+  (без `TRUNCATE`/удаления чужих данных).
 - Импорты: форматирует gci (std / default / localmodule).
 - Линтер golangci-lint v2 строгий (gosec, errcheck, staticcheck, gocritic,
   revive, ...). `nolint` — только с обоснованием.
