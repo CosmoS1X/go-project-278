@@ -35,10 +35,11 @@ func newTestRepository(t *testing.T) Repository {
 	require.NoError(t, pool.Ping(t.Context()))
 
 	db := stdlib.OpenDBFromPool(pool)
-	_, err = db.ExecContext(t.Context(), "TRUNCATE links RESTART IDENTITY")
+	tx, err := db.Begin()
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback() })
 
-	return NewRepository(sqlc.New(db))
+	return NewRepository(sqlc.New(tx))
 }
 
 func TestRepositoryCreateAndGetByID(t *testing.T) {

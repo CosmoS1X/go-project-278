@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +17,7 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/config"
 )
 
-func newTestPool(t *testing.T) *pgxpool.Pool {
+func newTestDB(t *testing.T) (*sql.Tx, *config.Config) {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
@@ -41,19 +43,18 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 
 	require.NoError(t, pool.Ping(t.Context()))
 
-	_, err = pool.Exec(t.Context(), "TRUNCATE links RESTART IDENTITY")
+	db := stdlib.OpenDBFromPool(pool)
+	tx, err := db.Begin()
 	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback() })
 
-	return pool
+	return tx, cfg
 }
 
 func TestPing(t *testing.T) {
-	pool := newTestPool(t)
+	tx, cfg := newTestDB(t)
 
-	cfg, err := config.Load()
-	require.NoError(t, err)
-
-	router := NewRouter(pool, cfg)
+	router := NewRouter(tx, cfg)
 
 	req, err := http.NewRequest(http.MethodGet, "/ping", http.NoBody)
 	assert.NoError(t, err)
