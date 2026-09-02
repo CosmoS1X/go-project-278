@@ -27,7 +27,7 @@ const (
 )
 
 type Repository interface {
-	List(ctx context.Context) ([]Link, error)
+	List(ctx context.Context, offset, limit int32) ([]Link, int64, error)
 	GetByID(ctx context.Context, id int64) (Link, error)
 	Create(ctx context.Context, originalURL, shortName string) (Link, error)
 	Update(ctx context.Context, id int64, originalURL, shortName string) (Link, error)
@@ -43,10 +43,18 @@ func NewRepository(queries *sqlc.Queries) Repository {
 	return &sqlcRepository{queries: queries}
 }
 
-func (r *sqlcRepository) List(ctx context.Context) ([]Link, error) {
-	rows, err := r.queries.GetLinks(ctx)
+func (r *sqlcRepository) List(ctx context.Context, offset, limit int32) ([]Link, int64, error) {
+	rows, err := r.queries.GetLinks(ctx, sqlc.GetLinksParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get links: %w", err)
+		return nil, 0, fmt.Errorf("get links: %w", err)
+	}
+
+	total, err := r.queries.CountLinks(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count links: %w", err)
 	}
 
 	links := make([]Link, 0, len(rows))
@@ -54,7 +62,7 @@ func (r *sqlcRepository) List(ctx context.Context) ([]Link, error) {
 		links = append(links, toLink(row))
 	}
 
-	return links, nil
+	return links, total, nil
 }
 
 func (r *sqlcRepository) GetByID(ctx context.Context, id int64) (Link, error) {

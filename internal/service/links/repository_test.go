@@ -82,9 +82,10 @@ func TestRepositoryList(t *testing.T) {
 	_, err = repo.Create(t.Context(), "https://b.com", "bbb")
 	require.NoError(t, err)
 
-	items, err := repo.List(t.Context())
+	items, total, err := repo.List(t.Context(), 0, 10)
 	require.NoError(t, err)
 	assert.Len(t, items, 2)
+	assert.Equal(t, int64(2), total)
 }
 
 func TestRepositoryUpdate(t *testing.T) {
