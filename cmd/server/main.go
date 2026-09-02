@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 
 	"github.com/CosmoS1X/go-project-278/internal/app"
@@ -37,7 +38,10 @@ func run() error {
 		return err
 	}
 
-	router := app.NewRouter(pool, cfg)
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+
+	router := app.NewRouter(db, cfg)
 
 	return router.Run(":" + cfg.Port)
 }

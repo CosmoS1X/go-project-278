@@ -1,6 +1,7 @@
 package links
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -25,9 +26,20 @@ func NewHandler(repo Repository, baseURL string) *Handler {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	items, err := h.repo.List(c.Request.Context())
+	offset, limit, ok := parseRangeParam(c)
+	if !ok {
+		return
+	}
+
+	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list links"})
+		return
+	}
+
+	if int64(offset) >= total && total > 0 {
+		c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, offset, total))
+		c.Status(http.StatusRequestedRangeNotSatisfiable)
 		return
 	}
 
@@ -36,6 +48,8 @@ func (h *Handler) List(c *gin.Context) {
 		resp = append(resp, h.toResponse(item))
 	}
 
+	end := int64(offset) + int64(len(items))
+	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -159,6 +173,38 @@ func (h *Handler) toResponse(item Link) response {
 		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, item.ShortName),
 		CreatedAt:   item.CreatedAt,
 	}
+}
+
+const (
+	defaultLimit = 10
+	maxLimit     = 100
+)
+
+func parseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
+	rangeParam := c.Query("range")
+	if rangeParam == "" {
+		return 0, defaultLimit, true
+	}
+
+	var pair [2]int32
+	if err := json.Unmarshal([]byte(rangeParam), &pair); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range parameter"})
+		return 0, 0, false
+	}
+
+	start, end := pair[0], pair[1]
+	if start < 0 || end <= start {
+		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range: start must be >= 0 and end must be > start"})
+		return 0, 0, false
+	}
+
+	limit = end - start
+	if limit > maxLimit {
+		c.JSON(http.StatusBadRequest, gin.H{errKey: fmt.Sprintf("range exceeds max limit of %d", maxLimit)})
+		return 0, 0, false
+	}
+
+	return start, limit, true
 }
 
 func parseIDParam(c *gin.Context) (int64, bool) {

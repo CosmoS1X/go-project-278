@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,8 +30,17 @@ const (
 	sampleOriginalURL = "https://a.com"
 )
 
-func (f *fakeRepository) List(_ context.Context) ([]Link, error) {
-	return f.links, nil
+func (f *fakeRepository) List(_ context.Context, offset, limit int32) ([]Link, int64, error) {
+	total := int64(len(f.links))
+	if int64(offset) >= total {
+		return []Link{}, total, nil
+	}
+	start := int(offset)
+	end := int(offset) + int(limit)
+	if int64(end) > total {
+		end = int(total)
+	}
+	return f.links[start:end], total, nil
 }
 
 func (f *fakeRepository) GetByID(_ context.Context, id int64) (Link, error) {
@@ -214,6 +224,54 @@ func TestListLinks(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	assert.Contains(t, w.Body.String(), `"id":1`)
+	assert.Equal(t, "links 0-1/1", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksWithRange(t *testing.T) {
+	links := make([]Link, 5)
+	for i := range links {
+		links[i] = Link{ID: int64(i + 1), OriginalURL: fmt.Sprintf("https://%d.com", i+1), ShortName: fmt.Sprintf("s%d", i+1), CreatedAt: time.Now()}
+	}
+	fake := &fakeRepository{links: links}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links?range=[0,2]", "")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Contains(t, w.Body.String(), `"id":1`)
+	assert.Contains(t, w.Body.String(), `"id":2`)
+	assert.NotContains(t, w.Body.String(), `"id":3`)
+	assert.Equal(t, "links 0-2/5", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksNoRange(t *testing.T) {
+	links := make([]Link, 15)
+	for i := range links {
+		links[i] = Link{ID: int64(i + 1), OriginalURL: fmt.Sprintf("https://%d.com", i+1), ShortName: fmt.Sprintf("s%d", i+1), CreatedAt: time.Now()}
+	}
+	fake := &fakeRepository{links: links}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "links 0-10/15", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksInvalidRange(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links?range=abc", "")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestListLinksRangeOutOfBounds(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links?range=[100,110]", "")
+	assert.Equal(t, http.StatusRequestedRangeNotSatisfiable, w.Code)
+	assert.Equal(t, "links 100-100/1", w.Header().Get("Content-Range"))
 }
 
 func TestUpdateLink(t *testing.T) {

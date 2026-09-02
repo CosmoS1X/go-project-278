@@ -36,17 +36,20 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 ## Структура
 
 - `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
-  `app.NewRouter(pool, cfg)` → `router.Run(":" + PORT)`.
+  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + PORT)`.
 - `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
   `BASE_SHORT_URL`, `PORT` (default `8080`).
 - `internal/app/app.go` — NewRouter(): gin.Logger + gin.Recovery + маршруты;
-  тонкий слой, только сборка роутера.
+  тонкий слой, только сборка роутера; принимает `sqlc.DBTX` (совместим
+  с `*sql.DB` и `*sql.Tx`).
 - `internal/app/app_test.go` — тесты маршрутов (testify + httptest) на реальной
   БД (skip, если нет `DATABASE_URL`).
 - `internal/service/links/` — доменный слой сущности links (пакет `links`):
   - `handler.go` — HTTP-хендлеры, зависит от интерфейса `Repository`;
+    пагинация List через `?range=[start,end]`, ответ с `Content-Range`;
   - `repository.go` — интерфейс `Repository` + реализация на sqlc,
     sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`;
+    `List(ctx, offset, limit int32) ([]Link, int64, error)`;
   - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`).
   - Тесты: `handler_test.go` — юнит с фейковым `Repository` (без БД);
     `repository_test.go` — интеграция на реальной БД.
@@ -61,6 +64,9 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - Conventional Commits: `feat:`, `fix:`, `chore:`, `test:`, `docs:`.
   Коммиты небольшие и логически раздельные; каждый коммит должен собираться.
 - Тесты рядом с кодом, в том же пакете; `gin.SetMode(gin.TestMode)` в тестах.
+- Интеграционные тесты, работающие с реальной БД, изолировать через транзакции:
+  каждый тест в своей транзакции `Begin()` + `Rollback()` в `t.Cleanup`
+  (без `TRUNCATE`/удаления чужих данных).
 - Импорты: форматирует gci (std / default / localmodule).
 - Линтер golangci-lint v2 строгий (gosec, errcheck, staticcheck, gocritic,
   revive, ...). `nolint` — только с обоснованием.
@@ -73,3 +79,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - sqlc: конфиг `internal/storage/sqlc/sqlc.yaml`, команда `make sqlc-generate`;
   сгенерированный код править руками нельзя.
 - В SQL-запросах всегда явно указывать поля, не использовать `*`.
+- Пагинация: `GET /api/links?range=[start,end]` (дефолт `[0,10]`, max 100).
+  Ответ: JSON-массив + `Content-Range: links {start}-{end}/{total}`.
+- Типы: offset/limit = `int32` (sqlc LIMIT/OFFSET), total/ID = `int64`
+  (COUNT::bigint / BIGSERIAL). BIGSERIAL оставлен: смена на SERIAL
+  не устраняет приведения (total = int64), но сужает PK.
