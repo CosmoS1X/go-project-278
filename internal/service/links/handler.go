@@ -48,7 +48,10 @@ func (h *Handler) List(c *gin.Context) {
 		resp = append(resp, h.toResponse(item))
 	}
 
-	end := int64(offset) + int64(len(items))
+	end := int64(offset) + int64(len(items)) - 1
+	if len(items) == 0 {
+		end = int64(offset)
+	}
 	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
 }
@@ -193,12 +196,12 @@ func parseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
 	}
 
 	start, end := pair[0], pair[1]
-	if start < 0 || end <= start {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range: start must be >= 0 and end must be > start"})
+	if start < 0 || end < start {
+		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range: start must be >= 0 and end must be >= start"})
 		return 0, 0, false
 	}
 
-	limit = end - start
+	limit = end - start + 1
 	if limit > maxLimit {
 		c.JSON(http.StatusBadRequest, gin.H{errKey: fmt.Sprintf("range exceeds max limit of %d", maxLimit)})
 		return 0, 0, false

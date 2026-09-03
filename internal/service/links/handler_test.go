@@ -224,7 +224,7 @@ func TestListLinks(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	assert.Contains(t, w.Body.String(), `"id":1`)
-	assert.Equal(t, "links 0-1/1", w.Header().Get("Content-Range"))
+	assert.Equal(t, "links 0-0/1", w.Header().Get("Content-Range"))
 }
 
 func TestListLinksWithRange(t *testing.T) {
@@ -240,7 +240,8 @@ func TestListLinksWithRange(t *testing.T) {
 
 	assert.Contains(t, w.Body.String(), `"id":1`)
 	assert.Contains(t, w.Body.String(), `"id":2`)
-	assert.NotContains(t, w.Body.String(), `"id":3`)
+	assert.Contains(t, w.Body.String(), `"id":3`)
+	assert.NotContains(t, w.Body.String(), `"id":4`)
 	assert.Equal(t, "links 0-2/5", w.Header().Get("Content-Range"))
 }
 
@@ -254,7 +255,7 @@ func TestListLinksNoRange(t *testing.T) {
 
 	w := doRequest(t, router, http.MethodGet, "/api/links", "")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "links 0-10/15", w.Header().Get("Content-Range"))
+	assert.Equal(t, "links 0-9/15", w.Header().Get("Content-Range"))
 }
 
 func TestListLinksInvalidRange(t *testing.T) {
