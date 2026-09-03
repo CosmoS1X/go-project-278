@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/CosmoS1X/go-project-278/internal/config"
@@ -15,6 +16,12 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	handler := links.NewHandler(repo, cfg.BaseShortURL)
 
 	router := gin.New()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:  []string{"http://localhost:5173"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE"},
+		AllowHeaders:  []string{"Content-Type"},
+		ExposeHeaders: []string{"Content-Range"},
+	}))
 	router.Use(gin.Logger(), gin.Recovery())
 
 	router.GET("/ping", func(c *gin.Context) {
