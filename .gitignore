@@ -4,3 +4,4 @@
 .air.toml
 coverage.out
 .env
+node_modules

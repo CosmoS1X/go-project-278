@@ -1,4 +1,4 @@
-.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev vuln sqlc-generate migrate-up migrate-down
+.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev dev-backend dev-frontend vuln sqlc-generate migrate-up migrate-down
 
 MIGRATIONS_DIR := db/migrations
 -include .env
@@ -49,7 +49,13 @@ lint-fix:
 	golangci-lint run --fix
 
 dev:
+	concurrently "make dev-backend" "make dev-frontend"
+
+dev-backend:
 	air
+
+dev-frontend:
+	cd frontend && npm exec start-hexlet-url-shortener-frontend
 
 vuln:
 	govulncheck ./...
