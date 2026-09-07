@@ -17,7 +17,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 
 	router := gin.New()
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:  []string{"http://localhost:5173"},
+		AllowOrigins:  []string{cfg.CORSOrigin},
 		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:  []string{"Content-Type"},
 		ExposeHeaders: []string{"Content-Range"},
