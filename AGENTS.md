@@ -22,7 +22,7 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 | `build`       | go build -o ./bin/server ./cmd/server         |
 | `run`         | собрать и запустить `./bin/server`            |
 | `dev`         | запустить бэкенд (air) и фронтенд (vite preview) вместе через concurrently |
-| `dev-backend` | только air (hot-reload; .air.toml в gitignore) |
+| `dev-backend` | только air (hot-reload) |
 | `dev-frontend`| только фронтенд (`npm exec start-hexlet-url-shortener-frontend`) |
 | `sqlc-generate` | сгенерировать код sqlc (`cd internal/storage/sqlc && sqlc generate`) |
 | `migrate-up`  | применить миграции goose (`-dir db/migrations`) |
@@ -38,9 +38,10 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 ## Структура
 
 - `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
-  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + PORT)`.
+  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + SERVER_PORT)`.
 - `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
-  `BASE_SHORT_URL`, `PORT` (default `8080`).
+  `BASE_SHORT_URL`, `SERVER_PORT` (default `8080`), `CORS_ORIGIN` (default
+  `http://localhost:5173`).
 - `internal/app/app.go` — NewRouter(): CORS (gin-contrib/cors) + gin.Logger +
   gin.Recovery + маршруты; тонкий слой, только сборка роутера; принимает
   `sqlc.DBTX` (совместим с `*sql.DB` и `*sql.Tx`).
@@ -85,14 +86,23 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   (порт 5173). `vite preview` наследует `server.proxy`, поэтому локально `/api`
   проксируется на бэкенд — с точки зрения браузера всё same-origin, CORS
   фактически обходится.
-- Планируемый деплой: render.com, в docker-контейнере. **Caddy раздаёт статику
-  фронта и проксирует `/api` на бэкенд.** Это ещё НЕ реализовано (в проекте нет
-  Caddyfile/nginx/Dockerfile/render.yaml) — реализация идёт отдельной веткой,
-  отдельно от основного кода.
-- CORS на бэкенде (gin-contrib/cors): `AllowOrigins` захардкожен
-  `http://localhost:5173`, методы GET/POST/PUT/DELETE, заголовки Content-Type,
-  expose `Content-Range` (нужен react-admin для total). Это dev-конфигурация;
-  при реальном деплое origin фронта будет иным — держать в уме.
+- Деплой: render.com, в docker-контейнере. **Caddy — точка входа**: раздаёт
+  статику фронта из `/app/public` и проксирует `/api/*` и `/ping` на бэкенд
+  (localhost:8080). Caddyfile: `:80`, `handle /api/*` → reverse_proxy,
+  `try_files {path} /index.html` для SPA-роутинга, `file_server` для статики.
+- `Dockerfile` — 3 стадии: (1) frontend-builder `node:22-alpine` (`npm ci`),
+  (2) backend-builder `golang:1.26-alpine` (go build + goose
+  `v3.27.3`), (3) runtime `alpine:3.22` (статический бинарник Caddy
+  `v2.11.4` с GitHub Releases, goose из builder). См. также `bin/run.sh`:
+  goose migrate-up → запуск Caddy в фоне → `exec /app/bin/server`.
+- Конфиг: `DATABASE_URL`, `BASE_SHORT_URL` (required), `SERVER_PORT` (default
+  8080, внутренний порт Go-сервера), `CORS_ORIGIN` (default
+  `http://localhost:5173`, можно переопределить под origin фронта в деплое).
+  Порт Caddy (`PORT` на Render) задаётся в Caddyfile (`:80`) и НЕ должен
+  конфликтовать с `SERVER_PORT`.
+- CORS на бэкенде (gin-contrib/cors): `AllowOrigins` берётся из
+  `cfg.CORSOrigin`, методы GET/POST/PUT/DELETE, заголовки Content-Type,
+  expose `Content-Range` (нужен react-admin для total).
 
 ## Слой данных (PostgreSQL)
 

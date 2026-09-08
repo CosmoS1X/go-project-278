@@ -1,0 +1,16 @@
+:80 {
+	root * /app/public
+
+	handle /api/* {
+		reverse_proxy localhost:8080
+	}
+
+	handle /ping {
+		reverse_proxy localhost:8080
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

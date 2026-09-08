@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.air.toml
+.vscode
+tmp
+bin/*
+!bin/run.sh
+coverage.out
+frontend/node_modules
+Makefile
+.golangci.yml
+AGENTS.md
+README.md
+LICENCE

@@ -25,7 +25,7 @@ run: build
 	./bin/server
 
 clean:
-	rm -rf ./bin coverage.out
+	rm -rf ./bin/server coverage.out
 
 test:
 	go test -v ./...
