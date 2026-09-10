@@ -45,22 +45,37 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - `internal/app/app.go` — NewRouter(): CORS (gin-contrib/cors) + gin.Logger +
   gin.Recovery + маршруты; тонкий слой, только сборка роутера; принимает
   `sqlc.DBTX` (совместим с `*sql.DB` и `*sql.Tx`).
+  Маршруты: `/ping`, `GET /r/:code` (редирект), `/api/links*`, `GET /api/link_visits`.
+  `router.TrustedPlatform = gin.PlatformCloudflare` — корректный ClientIP
+  (нужен статистике посещений) при работе за Cloudflare.
 - `internal/app/app_test.go` — тесты маршрутов (testify + httptest) на реальной
   БД (skip, если нет `DATABASE_URL`).
 - `internal/service/links/` — доменный слой сущности links (пакет `links`):
-  - `handler.go` — HTTP-хендлеры, зависит от интерфейса `Repository`;
-    пагинация List через `?range=[start,end]`, ответ с `Content-Range`;
+  - `handler.go` — HTTP-хендлеры, зависит от интерфейсов `Repository` и
+    `VisitRecorder` (запись визитов при редиректе); пагинация List через
+    `?range=[start,end]` (общий хелпер `httpapi.ParseRangeParam`), ответ с
+    `Content-Range`;
   - `repository.go` — интерфейс `Repository` + реализация на sqlc,
     sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`;
-    `List(ctx, offset, limit int32) ([]Link, int64, error)`;
+    `List(ctx, offset, limit int32) ([]Link, int64, error)`,
+    `GetByShortName(ctx, shortName)` (для редиректа);
   - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`).
-  - Тесты: `handler_test.go` — юнит с фейковым `Repository` (без БД);
-    `repository_test.go` — интеграция на реальной БД.
+  - Тесты: `handler_test.go` — юнит с фейковым `Repository` и
+    `fakeVisitRecorder` (без БД); `repository_test.go` — интеграция на реальной БД.
+- `internal/service/visits/` — доменный слой сущности link_visits (пакет
+  `visits`): тип `LinkVisit` + DTO (JSON-поле `reffer`), `handler.go`
+  (`ListVisits`, пагинация как у links), `repository.go` — интерфейс
+  `Repository` (`RecordVisit`, `ListVisits`) + реализация на sqlc.
+  Тесты: `handler_test.go` юнит с фейком, `repository_test.go` интеграция.
+- `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c, errKey)`
+  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100).
 - `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
   схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
 - `db/migrations/` — миграции goose (SQL, последовательная нумерация).
-- Новые сущности — отдельные пакеты `internal/service/<name>` (пакет называется
-  по имени сущности, не `<name>service`).
+- Новые самостоятельные сущности — отдельные пакеты
+  `internal/service/<name>` (пакет называется по имени сущности, не
+  `<name>service`); связанная аналитика `link_visits` живёт в своём пакете
+  `visits` и не пересекается с доменом `links`.
 
 ## Конвенции
 
@@ -87,9 +102,10 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   проксируется на бэкенд — с точки зрения браузера всё same-origin, CORS
   фактически обходится.
 - Деплой: render.com, в docker-контейнере. **Caddy — точка входа**: раздаёт
-  статику фронта из `/app/public` и проксирует `/api/*` и `/ping` на бэкенд
-  (localhost:8080). Caddyfile: `:80`, `handle /api/*` → reverse_proxy,
-  `try_files {path} /index.html` для SPA-роутинга, `file_server` для статики.
+  статику фронта из `/app/public` и проксирует `/api/*`, `/ping` и `/r/*` на
+  бэкенд (localhost:8080). Caddyfile: `:80`, `handle /api/*` и `handle /r/*` →
+  reverse_proxy, `try_files {path} /index.html` для SPA-роутинга,
+  `file_server` для статики.
 - `Dockerfile` — 3 стадии: (1) frontend-builder `node:22-alpine` (`npm ci`),
   (2) backend-builder `golang:1.26-alpine` (go build + goose
   `v3.27.3`), (3) runtime `alpine:3.22` (статический бинарник Caddy
@@ -110,12 +126,19 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - sqlc: конфиг `internal/storage/sqlc/sqlc.yaml`, команда `make sqlc-generate`;
   сгенерированный код править руками нельзя.
 - В SQL-запросах всегда явно указывать поля, не использовать `*`.
-- Пагинация: `GET /api/links?range=[start,end]` — **инклюзивный** диапазон
+- Пагинация: `GET /api/links?range=[start,end]` и `GET /api/link_visits?range=[start,end]` —
+  **инклюзивный** диапазон
   (как у react-admin/`ra-data-simple-rest`): для `perPage=5` фронт шлёт
   `range=[0,4]`, бэкенд возвращает `limit = end-start+1` записей. Без
   параметра `range` — дефолт 10 записей, максимум 100.
-  Ответ: JSON-массив + `Content-Range: links {start}-{end}/{total}`
-  (end — последний индекс возвращённых записей).
+  Ответ: JSON-массив + `Content-Range: links {start}-{end}/{total}` (или
+  `link_visits ...`) — end последний индекс возвращённых записей.
+- Таблица `link_visits` (миграция `00002`): `link_id` на `links(id)` с
+  `ON DELETE CASCADE`, колонки `ip`, `referer`, `user_agent`, `status`,
+  `created_at`; индекс по `link_id`.
+- **Gotcha фронта:** JSON-поле называется `reffer` (две «f») — так читает
+  предсобранный бандл фронта; колонка БД — `referer`. В коде отдаём сырые
+  ключи (data provider не маппит поля), комментарий-пояснение — у поля в DTO.
 - Типы: offset/limit = `int32` (sqlc LIMIT/OFFSET), total/ID = `int64`
   (COUNT::bigint / BIGSERIAL). BIGSERIAL оставлен: смена на SERIAL
   не устраняет приведения (total = int64), но сужает PK.
