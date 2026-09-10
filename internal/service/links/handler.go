@@ -1,7 +1,7 @@
 package links
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,24 +9,35 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 )
 
-const errKey = "error"
+const (
+	errKey          = "error"
+	errLinkNotFound = "link not found"
+)
 
-type Handler struct {
-	repo    Repository
-	baseURL string
+type VisitRecorder interface {
+	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
 }
 
-func NewHandler(repo Repository, baseURL string) *Handler {
+type Handler struct {
+	repo     Repository
+	recorder VisitRecorder
+	baseURL  string
+}
+
+func NewHandler(repo Repository, recorder VisitRecorder, baseURL string) *Handler {
 	return &Handler{
-		repo:    repo,
-		baseURL: strings.TrimSuffix(baseURL, "/"),
+		repo:     repo,
+		recorder: recorder,
+		baseURL:  strings.TrimSuffix(baseURL, "/"),
 	}
 }
 
 func (h *Handler) List(c *gin.Context) {
-	offset, limit, ok := parseRangeParam(c)
+	offset, limit, ok := httpapi.ParseRangeParam(c, errKey)
 	if !ok {
 		return
 	}
@@ -103,7 +114,7 @@ func (h *Handler) Get(c *gin.Context) {
 	item, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
@@ -142,7 +153,7 @@ func (h *Handler) Update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{errKey: "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
 		case errors.Is(err, ErrShortNameTaken):
 			c.JSON(http.StatusConflict, gin.H{errKey: "short name already exists"})
 		default:
@@ -168,6 +179,29 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handler) Redirect(c *gin.Context) {
+	code := c.Param("code")
+
+	link, err := h.repo.GetByShortName(c.Request.Context(), code)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		return
+	}
+
+	status := int32(http.StatusFound)
+
+	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to record visit"})
+		return
+	}
+
+	c.Redirect(int(status), link.OriginalURL)
+}
+
 func (h *Handler) toResponse(item Link) response {
 	return response{
 		ID:          item.ID,
@@ -176,38 +210,6 @@ func (h *Handler) toResponse(item Link) response {
 		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, item.ShortName),
 		CreatedAt:   item.CreatedAt,
 	}
-}
-
-const (
-	defaultLimit = 10
-	maxLimit     = 100
-)
-
-func parseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
-	rangeParam := c.Query("range")
-	if rangeParam == "" {
-		return 0, defaultLimit, true
-	}
-
-	var pair [2]int32
-	if err := json.Unmarshal([]byte(rangeParam), &pair); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range parameter"})
-		return 0, 0, false
-	}
-
-	start, end := pair[0], pair[1]
-	if start < 0 || end < start {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range: start must be >= 0 and end must be >= start"})
-		return 0, 0, false
-	}
-
-	limit = end - start + 1
-	if limit > maxLimit {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: fmt.Sprintf("range exceeds max limit of %d", maxLimit)})
-		return 0, 0, false
-	}
-
-	return start, limit, true
 }
 
 func parseIDParam(c *gin.Context) (int64, bool) {

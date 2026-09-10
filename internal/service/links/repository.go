@@ -29,6 +29,7 @@ const (
 type Repository interface {
 	List(ctx context.Context, offset, limit int32) ([]Link, int64, error)
 	GetByID(ctx context.Context, id int64) (Link, error)
+	GetByShortName(ctx context.Context, shortName string) (Link, error)
 	Create(ctx context.Context, originalURL, shortName string) (Link, error)
 	Update(ctx context.Context, id int64, originalURL, shortName string) (Link, error)
 	Delete(ctx context.Context, id int64) error
@@ -117,6 +118,18 @@ func (r *sqlcRepository) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+func (r *sqlcRepository) GetByShortName(ctx context.Context, shortName string) (Link, error) {
+	row, err := r.queries.GetLinkByShortName(ctx, shortName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Link{}, ErrNotFound
+		}
+		return Link{}, fmt.Errorf("get link by short name: %w", err)
+	}
+
+	return toLink(row), nil
 }
 
 func (r *sqlcRepository) GenerateShortName(ctx context.Context) (string, error) {

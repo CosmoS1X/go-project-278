@@ -1,11 +1,5 @@
-CREATE TABLE links (
-    id           BIGSERIAL    PRIMARY KEY,
-    original_url TEXT         NOT NULL,
-    short_name   VARCHAR(32)  NOT NULL UNIQUE,
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE link_visits (
+-- +goose Up
+CREATE TABLE IF NOT EXISTS link_visits (
     id         BIGSERIAL    PRIMARY KEY,
     link_id    BIGINT       NOT NULL REFERENCES links(id) ON DELETE CASCADE,
     ip         TEXT         NOT NULL DEFAULT '',
@@ -16,3 +10,6 @@ CREATE TABLE link_visits (
 );
 
 CREATE INDEX idx_link_visits_link_id ON link_visits(link_id);
+
+-- +goose Down
+DROP TABLE IF EXISTS link_visits;

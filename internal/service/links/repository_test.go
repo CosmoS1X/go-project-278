@@ -142,3 +142,22 @@ func TestRepositoryGenerateShortName(t *testing.T) {
 	assert.Len(t, name, shortNameLength)
 	assert.NotEqual(t, "aaaaaaaa", name)
 }
+
+func TestRepositoryGetByShortName(t *testing.T) {
+	repo := newTestRepository(t)
+
+	created, err := repo.Create(t.Context(), "https://example.com", "test1")
+	require.NoError(t, err)
+
+	got, err := repo.GetByShortName(t.Context(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, got.ID)
+	assert.Equal(t, created.OriginalURL, got.OriginalURL)
+}
+
+func TestRepositoryGetByShortNameNotFound(t *testing.T) {
+	repo := newTestRepository(t)
+
+	_, err := repo.GetByShortName(t.Context(), "nonexistent")
+	assert.True(t, errors.Is(err, ErrNotFound))
+}

@@ -25,6 +25,23 @@ type fakeRepository struct {
 	getNotFoundErr bool
 }
 
+type fakeVisitRecorder struct {
+	visits []recordedVisit
+}
+
+type recordedVisit struct {
+	LinkID    int64
+	Referer   string
+	IP        string
+	UserAgent string
+	Status    int32
+}
+
+func (f *fakeVisitRecorder) RecordVisit(_ context.Context, linkID int64, referer, ip, userAgent string, status int32) error {
+	f.visits = append(f.visits, recordedVisit{LinkID: linkID, Referer: referer, IP: ip, UserAgent: userAgent, Status: status})
+	return nil
+}
+
 const (
 	sampleShortName   = "aaa"
 	sampleOriginalURL = "https://a.com"
@@ -105,11 +122,25 @@ func (f *fakeRepository) GenerateShortName(_ context.Context) (string, error) {
 	return f.shortName, nil
 }
 
-func newTestHandler(repo Repository) *gin.Engine {
+func (f *fakeRepository) GetByShortName(_ context.Context, shortName string) (Link, error) {
+	for _, l := range f.links {
+		if l.ShortName == shortName {
+			return l, nil
+		}
+	}
+	return Link{}, ErrNotFound
+}
+
+func newTestHandler(repo Repository, recorder VisitRecorder) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	handler := NewHandler(repo, "https://short.io/r")
+	if recorder == nil {
+		recorder = &fakeVisitRecorder{}
+	}
+	handler := NewHandler(repo, recorder, "https://short.io/r")
 
 	router := gin.New()
+	router.GET("/r/:code", handler.Redirect)
+
 	api := router.Group("/api/links")
 	api.GET("", handler.List)
 	api.POST("", handler.Create)
@@ -142,7 +173,7 @@ func doRequest(t *testing.T, router *gin.Engine, method, path, body string) *htt
 
 func TestCreateLink(t *testing.T) {
 	fake := &fakeRepository{shortName: "gen123"}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com/long"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
@@ -156,7 +187,7 @@ func TestCreateLink(t *testing.T) {
 
 func TestCreateLinkWithProvidedShortName(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "exmpl"}`)
 	require.Equal(t, http.StatusCreated, w.Code)
@@ -167,7 +198,7 @@ func TestCreateLinkWithProvidedShortName(t *testing.T) {
 
 func TestCreateLinkMissingOriginalURL(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "  "}`)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -175,7 +206,7 @@ func TestCreateLinkMissingOriginalURL(t *testing.T) {
 
 func TestCreateLinkShortNameTaken(t *testing.T) {
 	fake := &fakeRepository{uniqueErr: true}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "dup"}`)
 	assert.Equal(t, http.StatusConflict, w.Code)
@@ -183,7 +214,7 @@ func TestCreateLinkShortNameTaken(t *testing.T) {
 
 func TestGenerateShortNameError(t *testing.T) {
 	fake := &fakeRepository{generateErr: errors.New("boom")}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com"}`)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -191,7 +222,7 @@ func TestGenerateShortNameError(t *testing.T) {
 
 func TestGetLink(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links/1", "")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -202,7 +233,7 @@ func TestGetLink(t *testing.T) {
 
 func TestGetLinkNotFound(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links/999", "")
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -210,7 +241,7 @@ func TestGetLinkNotFound(t *testing.T) {
 
 func TestGetLinkInvalidID(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links/abc", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -218,7 +249,7 @@ func TestGetLinkInvalidID(t *testing.T) {
 
 func TestListLinks(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links", "")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -233,7 +264,7 @@ func TestListLinksWithRange(t *testing.T) {
 		links[i] = Link{ID: int64(i + 1), OriginalURL: fmt.Sprintf("https://%d.com", i+1), ShortName: fmt.Sprintf("s%d", i+1), CreatedAt: time.Now()}
 	}
 	fake := &fakeRepository{links: links}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links?range=[0,2]", "")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -251,7 +282,7 @@ func TestListLinksNoRange(t *testing.T) {
 		links[i] = Link{ID: int64(i + 1), OriginalURL: fmt.Sprintf("https://%d.com", i+1), ShortName: fmt.Sprintf("s%d", i+1), CreatedAt: time.Now()}
 	}
 	fake := &fakeRepository{links: links}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links", "")
 	require.Equal(t, http.StatusOK, w.Code)
@@ -260,7 +291,7 @@ func TestListLinksNoRange(t *testing.T) {
 
 func TestListLinksInvalidRange(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links?range=abc", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -268,7 +299,7 @@ func TestListLinksInvalidRange(t *testing.T) {
 
 func TestListLinksRangeOutOfBounds(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodGet, "/api/links?range=[100,110]", "")
 	assert.Equal(t, http.StatusRequestedRangeNotSatisfiable, w.Code)
@@ -277,7 +308,7 @@ func TestListLinksRangeOutOfBounds(t *testing.T) {
 
 func TestUpdateLink(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPut, "/api/links/1", `{"original_url": "https://new.com", "short_name": "new1"}`)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -288,7 +319,7 @@ func TestUpdateLink(t *testing.T) {
 
 func TestUpdateLinkNotFound(t *testing.T) {
 	fake := &fakeRepository{}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPut, "/api/links/999", `{"original_url": "https://new.com", "short_name": "new1"}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -296,8 +327,48 @@ func TestUpdateLinkNotFound(t *testing.T) {
 
 func TestDeleteLink(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
-	router := newTestHandler(fake)
+	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodDelete, "/api/links/1", "")
 	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestRedirect(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	recorder := &fakeVisitRecorder{}
+	router := newTestHandler(fake, recorder)
+
+	w := doRequest(t, router, http.MethodGet, "/r/aaa", "")
+	assert.Equal(t, http.StatusFound, w.Code)
+	assert.Equal(t, sampleOriginalURL, w.Header().Get("Location"))
+	require.Len(t, recorder.visits, 1)
+	assert.Equal(t, int64(1), recorder.visits[0].LinkID)
+	assert.Equal(t, int32(http.StatusFound), recorder.visits[0].Status)
+}
+
+func TestRedirectNotFound(t *testing.T) {
+	fake := &fakeRepository{}
+	recorder := &fakeVisitRecorder{}
+	router := newTestHandler(fake, recorder)
+
+	w := doRequest(t, router, http.MethodGet, "/r/nonexistent", "")
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Empty(t, recorder.visits)
+}
+
+func TestRedirectRecordsReferer(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	recorder := &fakeVisitRecorder{}
+	router := newTestHandler(fake, recorder)
+
+	req, err := http.NewRequest(http.MethodGet, "/r/aaa", http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("Referer", "https://example.com/page")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusFound, w.Code)
+	require.Len(t, recorder.visits, 1)
+	assert.Equal(t, "https://example.com/page", recorder.visits[0].Referer)
 }
