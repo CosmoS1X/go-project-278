@@ -146,12 +146,16 @@ func newTestHandler(repo Repository) *gin.Engine {
 	handler := NewHandler(repo, "https://short.io/r")
 
 	router := gin.New()
+	router.GET("/r/:code", handler.Redirect)
+
 	api := router.Group("/api/links")
 	api.GET("", handler.List)
 	api.POST("", handler.Create)
 	api.GET("/:id", handler.Get)
 	api.PUT("/:id", handler.Update)
 	api.DELETE("/:id", handler.Delete)
+
+	router.GET("/api/link_visits", handler.ListVisits)
 
 	return router
 }
@@ -336,4 +340,76 @@ func TestDeleteLink(t *testing.T) {
 
 	w := doRequest(t, router, http.MethodDelete, "/api/links/1", "")
 	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestRedirect(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/r/aaa", "")
+	assert.Equal(t, http.StatusFound, w.Code)
+	assert.Equal(t, sampleOriginalURL, w.Header().Get("Location"))
+	assert.Len(t, fake.visits, 1)
+	assert.Equal(t, int64(1), fake.visits[0].LinkID)
+	assert.Equal(t, int32(http.StatusFound), fake.visits[0].Status)
+}
+
+func TestRedirectNotFound(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/r/nonexistent", "")
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Len(t, fake.visits, 0)
+}
+
+func TestRedirectRecordsReferer(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	router := newTestHandler(fake)
+
+	req, err := http.NewRequest(http.MethodGet, "/r/aaa", http.NoBody)
+	require.NoError(t, err)
+	req.Header.Set("Referer", "https://example.com/page")
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusFound, w.Code)
+	require.Len(t, fake.visits, 1)
+	assert.Equal(t, "https://example.com/page", fake.visits[0].Referer)
+}
+
+func TestListVisits(t *testing.T) {
+	now := time.Now()
+	fake := &fakeRepository{visits: []LinkVisit{
+		{ID: 1, LinkID: 1, IP: "1.2.3.4", Referer: "https://google.com", UserAgent: "Mozilla", Status: 302, CreatedAt: now},
+	}}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/link_visits", "")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Contains(t, w.Body.String(), `"ip":"1.2.3.4"`)
+	assert.Contains(t, w.Body.String(), `"reffer":"https://google.com"`)
+	assert.Contains(t, w.Body.String(), `"status":302`)
+	assert.Equal(t, "link_visits 0-0/1", w.Header().Get("Content-Range"))
+}
+
+func TestListVisitsWithRange(t *testing.T) {
+	now := time.Now()
+	visits := make([]LinkVisit, 5)
+	for i := range visits {
+		visits[i] = LinkVisit{ID: int64(i + 1), LinkID: 1, IP: fmt.Sprintf("1.0.0.%d", i+1), Status: 302, CreatedAt: now}
+	}
+	fake := &fakeRepository{visits: visits}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, http.MethodGet, "/api/link_visits?range=[0,2]", "")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Contains(t, w.Body.String(), `"ip":"1.0.0.1"`)
+	assert.Contains(t, w.Body.String(), `"ip":"1.0.0.2"`)
+	assert.Contains(t, w.Body.String(), `"ip":"1.0.0.3"`)
+	assert.NotContains(t, w.Body.String(), `"ip":"1.0.0.4"`)
+	assert.Equal(t, "link_visits 0-2/5", w.Header().Get("Content-Range"))
 }

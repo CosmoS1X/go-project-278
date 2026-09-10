@@ -9,6 +9,10 @@
 		reverse_proxy localhost:8080
 	}
 
+	handle /r/* {
+		reverse_proxy localhost:8080
+	}
+
 	handle {
 		try_files {path} /index.html
 		file_server

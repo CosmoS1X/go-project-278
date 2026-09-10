@@ -16,6 +16,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	handler := links.NewHandler(repo, cfg.BaseShortURL)
 
 	router := gin.New()
+	router.TrustedPlatform = gin.PlatformCloudflare
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:  []string{cfg.CORSOrigin},
 		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE"},
@@ -28,12 +29,16 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 		c.String(http.StatusOK, "pong")
 	})
 
+	router.GET("/r/:code", handler.Redirect)
+
 	api := router.Group("/api/links")
 	api.GET("", handler.List)
 	api.POST("", handler.Create)
 	api.GET("/:id", handler.Get)
 	api.PUT("/:id", handler.Update)
 	api.DELETE("/:id", handler.Delete)
+
+	router.GET("/api/link_visits", handler.ListVisits)
 
 	return router
 }

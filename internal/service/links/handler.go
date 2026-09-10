@@ -11,7 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const errKey = "error"
+const (
+	errKey          = "error"
+	errLinkNotFound = "link not found"
+)
 
 type Handler struct {
 	repo    Repository
@@ -103,7 +106,7 @@ func (h *Handler) Get(c *gin.Context) {
 	item, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
@@ -142,7 +145,7 @@ func (h *Handler) Update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{errKey: "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
 		case errors.Is(err, ErrShortNameTaken):
 			c.JSON(http.StatusConflict, gin.H{errKey: "short name already exists"})
 		default:
@@ -166,6 +169,60 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (h *Handler) Redirect(c *gin.Context) {
+	code := c.Param("code")
+
+	link, err := h.repo.GetByShortName(c.Request.Context(), code)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		return
+	}
+
+	status := int32(http.StatusFound)
+
+	if err := h.repo.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to record visit"})
+		return
+	}
+
+	c.Redirect(int(status), link.OriginalURL)
+}
+
+func (h *Handler) ListVisits(c *gin.Context) {
+	offset, limit, ok := parseRangeParam(c)
+	if !ok {
+		return
+	}
+
+	items, total, err := h.repo.ListVisits(c.Request.Context(), offset, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list visits"})
+		return
+	}
+
+	if int64(offset) >= total && total > 0 {
+		c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, offset, total))
+		c.Status(http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+
+	resp := make([]linkVisitResponse, 0, len(items))
+	for i := range items {
+		resp = append(resp, toLinkVisitResponse(&items[i]))
+	}
+
+	end := int64(offset) + int64(len(items)) - 1
+	if len(items) == 0 {
+		end = int64(offset)
+	}
+	c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, end, total))
+	c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handler) toResponse(item Link) response {
