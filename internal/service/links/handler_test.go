@@ -23,6 +23,7 @@ type fakeRepository struct {
 	uniqueErr      bool
 	getErr         error
 	getNotFoundErr bool
+	visits         []LinkVisit
 }
 
 const (
@@ -103,6 +104,41 @@ func (f *fakeRepository) GenerateShortName(_ context.Context) (string, error) {
 		return "", f.generateErr
 	}
 	return f.shortName, nil
+}
+
+func (f *fakeRepository) GetByShortName(_ context.Context, shortName string) (Link, error) {
+	for _, l := range f.links {
+		if l.ShortName == shortName {
+			return l, nil
+		}
+	}
+	return Link{}, ErrNotFound
+}
+
+func (f *fakeRepository) RecordVisit(_ context.Context, linkID int64, referer, ip, userAgent string, status int32) error {
+	f.visits = append(f.visits, LinkVisit{
+		ID:        int64(len(f.visits) + 1),
+		LinkID:    linkID,
+		IP:        ip,
+		Referer:   referer,
+		UserAgent: userAgent,
+		Status:    status,
+		CreatedAt: time.Now(),
+	})
+	return nil
+}
+
+func (f *fakeRepository) ListVisits(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
+	total := int64(len(f.visits))
+	if int64(offset) >= total {
+		return []LinkVisit{}, total, nil
+	}
+	start := int(offset)
+	end := int(offset) + int(limit)
+	if int64(end) > total {
+		end = int(total)
+	}
+	return f.visits[start:end], total, nil
 }
 
 func newTestHandler(repo Repository) *gin.Engine {
