@@ -1,7 +1,7 @@
 package links
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 )
 
 const (
@@ -16,20 +18,26 @@ const (
 	errLinkNotFound = "link not found"
 )
 
-type Handler struct {
-	repo    Repository
-	baseURL string
+type VisitRecorder interface {
+	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
 }
 
-func NewHandler(repo Repository, baseURL string) *Handler {
+type Handler struct {
+	repo     Repository
+	recorder VisitRecorder
+	baseURL  string
+}
+
+func NewHandler(repo Repository, recorder VisitRecorder, baseURL string) *Handler {
 	return &Handler{
-		repo:    repo,
-		baseURL: strings.TrimSuffix(baseURL, "/"),
+		repo:     repo,
+		recorder: recorder,
+		baseURL:  strings.TrimSuffix(baseURL, "/"),
 	}
 }
 
 func (h *Handler) List(c *gin.Context) {
-	offset, limit, ok := parseRangeParam(c)
+	offset, limit, ok := httpapi.ParseRangeParam(c, errKey)
 	if !ok {
 		return
 	}
@@ -186,43 +194,12 @@ func (h *Handler) Redirect(c *gin.Context) {
 
 	status := int32(http.StatusFound)
 
-	if err := h.repo.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
+	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to record visit"})
 		return
 	}
 
 	c.Redirect(int(status), link.OriginalURL)
-}
-
-func (h *Handler) ListVisits(c *gin.Context) {
-	offset, limit, ok := parseRangeParam(c)
-	if !ok {
-		return
-	}
-
-	items, total, err := h.repo.ListVisits(c.Request.Context(), offset, limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list visits"})
-		return
-	}
-
-	if int64(offset) >= total && total > 0 {
-		c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, offset, total))
-		c.Status(http.StatusRequestedRangeNotSatisfiable)
-		return
-	}
-
-	resp := make([]linkVisitResponse, 0, len(items))
-	for i := range items {
-		resp = append(resp, toLinkVisitResponse(&items[i]))
-	}
-
-	end := int64(offset) + int64(len(items)) - 1
-	if len(items) == 0 {
-		end = int64(offset)
-	}
-	c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, end, total))
-	c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handler) toResponse(item Link) response {
@@ -233,38 +210,6 @@ func (h *Handler) toResponse(item Link) response {
 		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, item.ShortName),
 		CreatedAt:   item.CreatedAt,
 	}
-}
-
-const (
-	defaultLimit = 10
-	maxLimit     = 100
-)
-
-func parseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
-	rangeParam := c.Query("range")
-	if rangeParam == "" {
-		return 0, defaultLimit, true
-	}
-
-	var pair [2]int32
-	if err := json.Unmarshal([]byte(rangeParam), &pair); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range parameter"})
-		return 0, 0, false
-	}
-
-	start, end := pair[0], pair[1]
-	if start < 0 || end < start {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid range: start must be >= 0 and end must be >= start"})
-		return 0, 0, false
-	}
-
-	limit = end - start + 1
-	if limit > maxLimit {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: fmt.Sprintf("range exceeds max limit of %d", maxLimit)})
-		return 0, 0, false
-	}
-
-	return start, limit, true
 }
 
 func parseIDParam(c *gin.Context) (int64, bool) {

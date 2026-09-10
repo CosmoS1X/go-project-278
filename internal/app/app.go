@@ -8,12 +8,16 @@ import (
 
 	"github.com/CosmoS1X/go-project-278/internal/config"
 	"github.com/CosmoS1X/go-project-278/internal/service/links"
+	"github.com/CosmoS1X/go-project-278/internal/service/visits"
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
 )
 
 func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
-	repo := links.NewRepository(sqlc.New(db))
-	handler := links.NewHandler(repo, cfg.BaseShortURL)
+	queries := sqlc.New(db)
+	repo := links.NewRepository(queries)
+	visitsRepo := visits.NewRepository(queries)
+	handler := links.NewHandler(repo, visitsRepo, cfg.BaseShortURL)
+	visitsHandler := visits.NewHandler(visitsRepo)
 
 	router := gin.New()
 	router.TrustedPlatform = gin.PlatformCloudflare
@@ -38,7 +42,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	api.PUT("/:id", handler.Update)
 	api.DELETE("/:id", handler.Delete)
 
-	router.GET("/api/link_visits", handler.ListVisits)
+	router.GET("/api/link_visits", visitsHandler.ListVisits)
 
 	return router
 }

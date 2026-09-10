@@ -34,8 +34,6 @@ type Repository interface {
 	Update(ctx context.Context, id int64, originalURL, shortName string) (Link, error)
 	Delete(ctx context.Context, id int64) error
 	GenerateShortName(ctx context.Context) (string, error)
-	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
-	ListVisits(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error)
 }
 
 type sqlcRepository struct {
@@ -134,42 +132,6 @@ func (r *sqlcRepository) GetByShortName(ctx context.Context, shortName string) (
 	return toLink(row), nil
 }
 
-func (r *sqlcRepository) RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error {
-	if _, err := r.queries.CreateVisit(ctx, sqlc.CreateVisitParams{
-		LinkID:    linkID,
-		Ip:        ip,
-		Referer:   referer,
-		UserAgent: userAgent,
-		Status:    status,
-	}); err != nil {
-		return fmt.Errorf("record visit: %w", err)
-	}
-
-	return nil
-}
-
-func (r *sqlcRepository) ListVisits(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
-	rows, err := r.queries.GetLinkVisits(ctx, sqlc.GetLinkVisitsParams{
-		Limit:  limit,
-		Offset: offset,
-	})
-	if err != nil {
-		return nil, 0, fmt.Errorf("get link visits: %w", err)
-	}
-
-	total, err := r.queries.CountLinkVisits(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count link visits: %w", err)
-	}
-
-	visits := make([]LinkVisit, 0, len(rows))
-	for i := range rows {
-		visits = append(visits, toLinkVisit(&rows[i]))
-	}
-
-	return visits, total, nil
-}
-
 func (r *sqlcRepository) GenerateShortName(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -201,18 +163,6 @@ func toLink(row sqlc.Link) Link {
 		OriginalURL: row.OriginalUrl,
 		ShortName:   row.ShortName,
 		CreatedAt:   row.CreatedAt,
-	}
-}
-
-func toLinkVisit(row *sqlc.LinkVisit) LinkVisit {
-	return LinkVisit{
-		ID:        row.ID,
-		LinkID:    row.LinkID,
-		IP:        row.Ip,
-		UserAgent: row.UserAgent,
-		Status:    row.Status,
-		Referer:   row.Referer,
-		CreatedAt: row.CreatedAt,
 	}
 }
 
