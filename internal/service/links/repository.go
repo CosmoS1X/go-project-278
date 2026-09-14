@@ -16,11 +16,6 @@ import (
 
 const uniqueViolation = "23505"
 
-var (
-	ErrNotFound       = errors.New("link not found")
-	ErrShortNameTaken = errors.New("short name already taken")
-)
-
 const (
 	shortNameLength   = 8
 	shortNameAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
