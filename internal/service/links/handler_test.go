@@ -200,8 +200,10 @@ func TestCreateLinkMissingOriginalURL(t *testing.T) {
 	fake := &fakeRepository{}
 	router := newTestHandler(fake, nil)
 
-	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "  "}`)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": ""}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
 }
 
 func TestCreateLinkShortNameTaken(t *testing.T) {
@@ -209,7 +211,10 @@ func TestCreateLinkShortNameTaken(t *testing.T) {
 	router := newTestHandler(fake, nil)
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "dup"}`)
-	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+	assert.Contains(t, w.Body.String(), "short name already in use")
 }
 
 func TestGenerateShortNameError(t *testing.T) {
@@ -218,6 +223,46 @@ func TestGenerateShortNameError(t *testing.T) {
 
 	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com"}`)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestCreateLinkInvalidJSON(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{invalid json}`)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"error"`)
+	assert.Contains(t, w.Body.String(), "invalid request")
+}
+
+func TestCreateLinkInvalidURL(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "not-a-url"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
+}
+
+func TestCreateLinkShortNameTooShort(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "ab"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+}
+
+func TestCreateLinkShortNameTooLong(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "abcdefghijklmnopqrstuvwxyz0123456"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
 }
 
 func TestGetLink(t *testing.T) {
@@ -323,6 +368,20 @@ func TestUpdateLinkNotFound(t *testing.T) {
 
 	w := doRequest(t, router, http.MethodPut, "/api/links/999", `{"original_url": "https://new.com", "short_name": "new1"}`)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestUpdateLinkShortNameTaken(t *testing.T) {
+	fake := &fakeRepository{
+		links:     []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}},
+		uniqueErr: true,
+	}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPut, "/api/links/1", `{"original_url": "https://new.com", "short_name": "dup"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+	assert.Contains(t, w.Body.String(), "short name already in use")
 }
 
 func TestDeleteLink(t *testing.T) {

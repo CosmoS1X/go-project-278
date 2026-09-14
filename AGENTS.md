@@ -55,11 +55,13 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
     `VisitRecorder` (запись визитов при редиректе); пагинация List через
     `?range=[start,end]` (общий хелпер `httpapi.ParseRangeParam`), ответ с
     `Content-Range`;
-  - `repository.go` — интерфейс `Repository` + реализация на sqlc,
-    sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`;
+  - `repository.go` — интерфейс `Repository` + реализация на sqlc;
     `List(ctx, offset, limit int32) ([]Link, int64, error)`,
     `GetByShortName(ctx, shortName)` (для редиректа);
-  - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`).
+  - `errors.go` — sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`.
+  - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`);
+    request-DTO с тегами валидации `binding` (`original_url`: required+url,
+    `short_name`: omitempty+min3/max32).
   - Тесты: `handler_test.go` — юнит с фейковым `Repository` и
     `fakeVisitRecorder` (без БД); `repository_test.go` — интеграция на реальной БД.
 - `internal/service/visits/` — доменный слой сущности link_visits (пакет
@@ -68,7 +70,9 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   `Repository` (`RecordVisit`, `ListVisits`) + реализация на sqlc.
   Тесты: `handler_test.go` юнит с фейком, `repository_test.go` интеграция.
 - `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c, errKey)`
-  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100).
+  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100) и
+  `BindAndValidate(c, obj)` — биндинг JSON + валидация тегов `binding`
+  с единым форматом ошибок API.
 - `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
   схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
 - `db/migrations/` — миграции goose (SQL, последовательная нумерация).
@@ -89,6 +93,11 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - Линтер golangci-lint v2 строгий (gosec, errcheck, staticcheck, gocritic,
   revive, ...). `nolint` — только с обоснованием.
 - HTTP-слой зависит от интерфейса `Repository`, не от sqlc напрямую.
+- Единый формат ошибок API (хелпер `httpapi.BindAndValidate`):
+  ошибки валидации → `422 {"errors": {"<field>": "<message>"}}` (ключи полей —
+  из JSON-тегов DTO); некорректный JSON → `400 {"error": "invalid request"}`.
+  Конфликт уникальности `short_name` → `422 {"errors": {"short_name":
+  "short name already in use"}}` (маппится из sentinel `ErrShortNameTaken`).
 - НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
 
 ## Фронтенд и деплой
