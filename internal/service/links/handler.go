@@ -69,19 +69,12 @@ func (h *Handler) List(c *gin.Context) {
 
 func (h *Handler) Create(c *gin.Context) {
 	var req request
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid request body"})
+	if !httpapi.BindAndValidate(c, &req) {
 		return
 	}
 
-	var (
-		originalURL = strings.TrimSpace(req.OriginalURL)
-		shortName   = strings.TrimSpace(req.ShortName)
-	)
-	if originalURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "original_url is required"})
-		return
-	}
+	originalURL := strings.TrimSpace(req.OriginalURL)
+	shortName := strings.TrimSpace(req.ShortName)
 
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
@@ -95,7 +88,7 @@ func (h *Handler) Create(c *gin.Context) {
 	item, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
 	if err != nil {
 		if errors.Is(err, ErrShortNameTaken) {
-			c.JSON(http.StatusConflict, gin.H{errKey: "short name already exists"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": "short name already in use"}})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to create link"})
@@ -131,23 +124,12 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	var req request
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid request body"})
+	if !httpapi.BindAndValidate(c, &req) {
 		return
 	}
 
-	var (
-		originalURL = strings.TrimSpace(req.OriginalURL)
-		shortName   = strings.TrimSpace(req.ShortName)
-	)
-	if originalURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "original_url is required"})
-		return
-	}
-	if shortName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "short_name is required"})
-		return
-	}
+	originalURL := strings.TrimSpace(req.OriginalURL)
+	shortName := strings.TrimSpace(req.ShortName)
 
 	item, err := h.repo.Update(c.Request.Context(), id, originalURL, shortName)
 	if err != nil {
@@ -155,7 +137,7 @@ func (h *Handler) Update(c *gin.Context) {
 		case errors.Is(err, ErrNotFound):
 			c.JSON(http.StatusNotFound, gin.H{errKey: errLinkNotFound})
 		case errors.Is(err, ErrShortNameTaken):
-			c.JSON(http.StatusConflict, gin.H{errKey: "short name already exists"})
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": "short name already in use"}})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to update link"})
 		}

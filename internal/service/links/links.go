@@ -12,8 +12,8 @@ type Link struct {
 }
 
 type request struct {
-	OriginalURL string `json:"original_url"`
-	ShortName   string `json:"short_name"`
+	OriginalURL string `json:"original_url" binding:"required,url"`
+	ShortName   string `json:"short_name"   binding:"omitempty,min=3,max=32"`
 }
 
 type response struct {
