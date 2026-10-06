@@ -1,6 +1,8 @@
 package links
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -15,7 +17,7 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
 )
 
-func newTestRepository(t *testing.T) Repository {
+func newTestRepositoryTx(t *testing.T) (Repository, *sql.Tx) {
 	t.Helper()
 
 	_ = godotenv.Load(filepath.Join("..", "..", "..", ".env"))
@@ -36,7 +38,59 @@ func newTestRepository(t *testing.T) Repository {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = tx.Rollback() })
 
-	return NewRepository(sqlc.New(tx))
+	return NewRepository(sqlc.New(tx)), tx
+}
+
+func newTestRepository(t *testing.T) Repository {
+	t.Helper()
+
+	repo, _ := newTestRepositoryTx(t)
+	return repo
+}
+
+type errDBTX struct {
+	db *sql.DB
+}
+
+func (e *errDBTX) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return e.db.ExecContext(ctx, query, args...)
+}
+
+func (e *errDBTX) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	return e.db.PrepareContext(ctx, query)
+}
+
+func (e *errDBTX) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return e.db.QueryContext(ctx, query, args...)
+}
+
+func (e *errDBTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return e.db.QueryRowContext(ctx, query, args...)
+}
+
+func newClosedDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("pgx", "postgres://closed")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	return db
+}
+
+func newStubRepository(t *testing.T) Repository {
+	t.Helper()
+
+	return NewRepository(sqlc.New(&errDBTX{db: newClosedDB(t)}))
+}
+
+type countFailTX struct {
+	sqlc.DBTX
+	closed *sql.DB
+}
+
+func (c *countFailTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return c.closed.QueryRowContext(ctx, query, args...)
 }
 
 func TestRepositoryCreateAndGetByID(t *testing.T) {
@@ -160,4 +214,80 @@ func TestRepositoryGetByShortNameNotFound(t *testing.T) {
 
 	_, err := repo.GetByShortName(t.Context(), "nonexistent")
 	assert.True(t, errors.Is(err, ErrNotFound))
+}
+
+func TestRepositoryUpdateDuplicateShortName(t *testing.T) {
+	repo := newTestRepository(t)
+
+	_, err := repo.Create(t.Context(), "https://a.com", "takens")
+	require.NoError(t, err)
+
+	b, err := repo.Create(t.Context(), "https://b.com", "other1")
+	require.NoError(t, err)
+
+	_, err = repo.Update(t.Context(), b.ID, "https://b.com", "takens")
+	assert.True(t, errors.Is(err, ErrShortNameTaken))
+}
+
+func TestRepositoryErrorsOnClosedDB(t *testing.T) {
+	repo := newStubRepository(t)
+
+	t.Run("list", func(t *testing.T) {
+		_, _, err := repo.List(t.Context(), 0, 10)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "get links")
+	})
+
+	t.Run("get by id", func(t *testing.T) {
+		_, err := repo.GetByID(t.Context(), 1)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrNotFound)
+		assert.Contains(t, err.Error(), "get link by id")
+	})
+
+	t.Run("create", func(t *testing.T) {
+		_, err := repo.Create(t.Context(), "https://a.com", "create1")
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrShortNameTaken)
+		assert.Contains(t, err.Error(), "create link")
+	})
+
+	t.Run("update", func(t *testing.T) {
+		_, err := repo.Update(t.Context(), 1, "https://a.com", "update1")
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrNotFound)
+		assert.NotErrorIs(t, err, ErrShortNameTaken)
+		assert.Contains(t, err.Error(), "update link")
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		err := repo.Delete(t.Context(), 1)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "delete link")
+	})
+
+	t.Run("get by short name", func(t *testing.T) {
+		_, err := repo.GetByShortName(t.Context(), "some1")
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrNotFound)
+		assert.Contains(t, err.Error(), "get link by short name")
+	})
+
+	t.Run("generate short name", func(t *testing.T) {
+		_, err := repo.GenerateShortName(t.Context())
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrNotFound)
+	})
+}
+
+func TestRepositoryListCountError(t *testing.T) {
+	_, tx := newTestRepositoryTx(t)
+	repo := NewRepository(sqlc.New(&countFailTX{
+		DBTX:   tx,
+		closed: newClosedDB(t),
+	}))
+
+	_, _, err := repo.List(t.Context(), 0, 10)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "count links")
 }
