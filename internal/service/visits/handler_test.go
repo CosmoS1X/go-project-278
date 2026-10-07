@@ -2,6 +2,7 @@ package visits
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,8 @@ import (
 )
 
 type fakeRepository struct {
-	visits []LinkVisit
+	visits  []LinkVisit
+	listErr error
 }
 
 const sampleIP = "1.2.3.4"
@@ -33,6 +35,9 @@ func (f *fakeRepository) RecordVisit(_ context.Context, linkID int64, referer, i
 }
 
 func (f *fakeRepository) ListVisits(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
+	if f.listErr != nil {
+		return nil, 0, f.listErr
+	}
 	total := int64(len(f.visits))
 	if int64(offset) >= total {
 		return []LinkVisit{}, total, nil
@@ -117,4 +122,24 @@ func TestListVisitsRangeOutOfBounds(t *testing.T) {
 	w := doRequest(t, router, "/api/link_visits?range=[100,110]")
 	assert.Equal(t, http.StatusRequestedRangeNotSatisfiable, w.Code)
 	assert.Equal(t, "link_visits 100-100/1", w.Header().Get("Content-Range"))
+}
+
+func TestListVisitsEmpty(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, "/api/link_visits")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Equal(t, "[]", w.Body.String())
+	assert.Equal(t, "link_visits 0-0/0", w.Header().Get("Content-Range"))
+}
+
+func TestListVisitsRepositoryError(t *testing.T) {
+	fake := &fakeRepository{listErr: errors.New("boom")}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, "/api/link_visits")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list visits")
 }

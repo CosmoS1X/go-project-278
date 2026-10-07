@@ -16,17 +16,22 @@ import (
 )
 
 type fakeRepository struct {
-	links          []Link
-	shortName      string
-	generateErr    error
-	createErr      error
-	uniqueErr      bool
-	getErr         error
-	getNotFoundErr bool
+	links             []Link
+	shortName         string
+	generateErr       error
+	createErr         error
+	uniqueErr         bool
+	getErr            error
+	getNotFoundErr    bool
+	listErr           error
+	updateErr         error
+	deleteErr         error
+	getByShortNameErr error
 }
 
 type fakeVisitRecorder struct {
 	visits []recordedVisit
+	err    error
 }
 
 type recordedVisit struct {
@@ -39,7 +44,7 @@ type recordedVisit struct {
 
 func (f *fakeVisitRecorder) RecordVisit(_ context.Context, linkID int64, referer, ip, userAgent string, status int32) error {
 	f.visits = append(f.visits, recordedVisit{LinkID: linkID, Referer: referer, IP: ip, UserAgent: userAgent, Status: status})
-	return nil
+	return f.err
 }
 
 const (
@@ -48,6 +53,9 @@ const (
 )
 
 func (f *fakeRepository) List(_ context.Context, offset, limit int32) ([]Link, int64, error) {
+	if f.listErr != nil {
+		return nil, 0, f.listErr
+	}
 	total := int64(len(f.links))
 	if int64(offset) >= total {
 		return []Link{}, total, nil
@@ -96,6 +104,9 @@ func (f *fakeRepository) Update(_ context.Context, id int64, originalURL, shortN
 	if f.uniqueErr {
 		return Link{}, ErrShortNameTaken
 	}
+	if f.updateErr != nil {
+		return Link{}, f.updateErr
+	}
 	for i, l := range f.links {
 		if l.ID == id {
 			f.links[i] = Link{ID: id, OriginalURL: originalURL, ShortName: shortName, CreatedAt: l.CreatedAt}
@@ -106,6 +117,9 @@ func (f *fakeRepository) Update(_ context.Context, id int64, originalURL, shortN
 }
 
 func (f *fakeRepository) Delete(_ context.Context, id int64) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	for i, l := range f.links {
 		if l.ID == id {
 			f.links = append(f.links[:i], f.links[i+1:]...)
@@ -123,6 +137,9 @@ func (f *fakeRepository) GenerateShortName(_ context.Context) (string, error) {
 }
 
 func (f *fakeRepository) GetByShortName(_ context.Context, shortName string) (Link, error) {
+	if f.getByShortNameErr != nil {
+		return Link{}, f.getByShortNameErr
+	}
 	for _, l := range f.links {
 		if l.ShortName == shortName {
 			return l, nil
@@ -430,4 +447,121 @@ func TestRedirectRecordsReferer(t *testing.T) {
 	assert.Equal(t, http.StatusFound, w.Code)
 	require.Len(t, recorder.visits, 1)
 	assert.Equal(t, "https://example.com/page", recorder.visits[0].Referer)
+}
+
+func TestListLinksEmpty(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links", "")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Equal(t, "[]", w.Body.String())
+	assert.Equal(t, "links 0-0/0", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksRepositoryError(t *testing.T) {
+	fake := &fakeRepository{listErr: errors.New("boom")}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links", "")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list links")
+}
+
+func TestCreateLinkRepositoryError(t *testing.T) {
+	fake := &fakeRepository{createErr: errors.New("boom")}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "exmpl"}`)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to create link")
+}
+
+func TestGetLinkRepositoryError(t *testing.T) {
+	fake := &fakeRepository{getErr: errors.New("boom")}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links/1", "")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to get link")
+}
+
+func TestGetLinkNonPositiveID(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links/0", "")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid id")
+}
+
+func TestUpdateLinkInvalidID(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPut, "/api/links/abc", `{"original_url": "https://new.com", "short_name": "new1"}`)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid id")
+}
+
+func TestUpdateLinkInvalidJSON(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPut, "/api/links/1", `{invalid json}`)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid request")
+}
+
+func TestUpdateLinkRepositoryError(t *testing.T) {
+	fake := &fakeRepository{
+		links:     []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}},
+		updateErr: errors.New("boom"),
+	}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPut, "/api/links/1", `{"original_url": "https://new.com", "short_name": "new1"}`)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to update link")
+}
+
+func TestDeleteLinkInvalidID(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodDelete, "/api/links/abc", "")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid id")
+}
+
+func TestDeleteLinkRepositoryError(t *testing.T) {
+	fake := &fakeRepository{deleteErr: errors.New("boom")}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodDelete, "/api/links/1", "")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to delete link")
+}
+
+func TestRedirectRepositoryError(t *testing.T) {
+	fake := &fakeRepository{getByShortNameErr: errors.New("boom")}
+	recorder := &fakeVisitRecorder{}
+	router := newTestHandler(fake, recorder)
+
+	w := doRequest(t, router, http.MethodGet, "/r/aaa", "")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to get link")
+	assert.Empty(t, recorder.visits)
+}
+
+func TestRedirectRecordVisitError(t *testing.T) {
+	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
+	recorder := &fakeVisitRecorder{err: errors.New("boom")}
+	router := newTestHandler(fake, recorder)
+
+	w := doRequest(t, router, http.MethodGet, "/r/aaa", "")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to record visit")
+	assert.Empty(t, w.Header().Get("Location"))
 }
