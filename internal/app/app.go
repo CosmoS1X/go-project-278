@@ -42,7 +42,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	api.PUT("/:id", handler.Update)
 	api.DELETE("/:id", handler.Delete)
 
-	router.GET("/api/link_visits", visitsHandler.ListVisits)
+	router.GET("/api/link_visits", visitsHandler.List)
 
 	return router
 }

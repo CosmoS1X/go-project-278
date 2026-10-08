@@ -97,7 +97,7 @@ func TestRepositoryRecordVisit(t *testing.T) {
 
 	require.NoError(t, repo.RecordVisit(t.Context(), linkID, "https://google.com", sampleIP, "Mozilla/5.0", 302))
 
-	visits, total, err := repo.ListVisits(t.Context(), 0, 100)
+	visits, total, err := repo.List(t.Context(), 0, 100)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, total, int64(1))
 
@@ -122,7 +122,7 @@ func TestRepositoryListVisits(t *testing.T) {
 	require.NoError(t, repo.RecordVisit(t.Context(), linkID, "https://a.com", "10.0.0.1", "Chrome", 302))
 	require.NoError(t, repo.RecordVisit(t.Context(), linkID, "https://b.com", "10.0.0.2", "Firefox", 302))
 
-	visits, total, err := repo.ListVisits(t.Context(), 0, 100)
+	visits, total, err := repo.List(t.Context(), 0, 100)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, total, int64(2))
 
@@ -138,7 +138,7 @@ func TestRepositoryListVisits(t *testing.T) {
 func TestRepositoryListVisitsError(t *testing.T) {
 	repo := NewRepository(sqlc.New(&errDBTX{db: newClosedDB(t)}))
 
-	_, _, err := repo.ListVisits(t.Context(), 0, 10)
+	_, _, err := repo.List(t.Context(), 0, 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get link visits")
 }
@@ -150,7 +150,7 @@ func TestRepositoryListVisitsCountError(t *testing.T) {
 		closed: newClosedDB(t),
 	}))
 
-	_, _, err := repo.ListVisits(t.Context(), 0, 10)
+	_, _, err := repo.List(t.Context(), 0, 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "count link visits")
 }

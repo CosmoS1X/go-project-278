@@ -34,7 +34,7 @@ func (f *fakeRepository) RecordVisit(_ context.Context, linkID int64, referer, i
 	return nil
 }
 
-func (f *fakeRepository) ListVisits(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
+func (f *fakeRepository) List(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
 	if f.listErr != nil {
 		return nil, 0, f.listErr
 	}
@@ -55,7 +55,7 @@ func newTestHandler(repo Repository) *gin.Engine {
 	handler := NewHandler(repo)
 
 	router := gin.New()
-	router.GET("/api/link_visits", handler.ListVisits)
+	router.GET("/api/link_visits", handler.List)
 
 	return router
 }

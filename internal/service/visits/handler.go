@@ -17,13 +17,13 @@ func NewHandler(repo Repository) *Handler {
 	return &Handler{repo: repo}
 }
 
-func (h *Handler) ListVisits(c *gin.Context) {
+func (h *Handler) List(c *gin.Context) {
 	offset, limit, ok := httpapi.ParseRangeParam(c)
 	if !ok {
 		return
 	}
 
-	items, total, err := h.repo.ListVisits(c.Request.Context(), offset, limit)
+	visits, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list visits"})
 		return
@@ -35,15 +35,19 @@ func (h *Handler) ListVisits(c *gin.Context) {
 		return
 	}
 
-	resp := make([]response, 0, len(items))
-	for i := range items {
-		resp = append(resp, toResponse(&items[i]))
+	resp := make([]response, 0, len(visits))
+	for _, visit := range visits {
+		resp = append(resp, toResponse(&visit))
 	}
 
-	end := int64(offset) + int64(len(items)) - 1
-	if len(items) == 0 {
+	end := int64(offset) + int64(len(visits)) - 1
+	if len(visits) == 0 {
 		end = int64(offset)
 	}
 	c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
+}
+
+func toResponse(visit *LinkVisit) response {
+	return response(*visit)
 }

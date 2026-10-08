@@ -9,7 +9,7 @@ import (
 
 type Repository interface {
 	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
-	ListVisits(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error)
+	List(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error)
 }
 
 type sqlcRepository struct {
@@ -34,7 +34,7 @@ func (r *sqlcRepository) RecordVisit(ctx context.Context, linkID int64, referer,
 	return nil
 }
 
-func (r *sqlcRepository) ListVisits(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
+func (r *sqlcRepository) List(ctx context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
 	rows, err := r.queries.GetLinkVisits(ctx, sqlc.GetLinkVisitsParams{
 		Limit:  limit,
 		Offset: offset,
@@ -49,8 +49,8 @@ func (r *sqlcRepository) ListVisits(ctx context.Context, offset, limit int32) ([
 	}
 
 	visits := make([]LinkVisit, 0, len(rows))
-	for i := range rows {
-		visits = append(visits, toLinkVisit(&rows[i]))
+	for _, row := range rows {
+		visits = append(visits, toLinkVisit(&row))
 	}
 
 	return visits, total, nil
