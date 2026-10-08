@@ -14,9 +14,9 @@ import (
 
 func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	queries := sqlc.New(db)
-	repo := links.NewRepository(queries)
+	linksRepo := links.NewRepository(queries)
 	visitsRepo := visits.NewRepository(queries)
-	handler := links.NewHandler(repo, visitsRepo, cfg.BaseShortURL)
+	linksHandler := links.NewHandler(linksRepo, visitsRepo, cfg.BaseShortURL)
 	visitsHandler := visits.NewHandler(visitsRepo)
 
 	router := gin.New()
@@ -33,14 +33,14 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 		c.String(http.StatusOK, "pong")
 	})
 
-	router.GET("/r/:code", handler.Redirect)
+	router.GET("/r/:code", linksHandler.Redirect)
 
 	api := router.Group("/api/links")
-	api.GET("", handler.List)
-	api.POST("", handler.Create)
-	api.GET("/:id", handler.Get)
-	api.PUT("/:id", handler.Update)
-	api.DELETE("/:id", handler.Delete)
+	api.GET("", linksHandler.List)
+	api.POST("", linksHandler.Create)
+	api.GET("/:id", linksHandler.Get)
+	api.PUT("/:id", linksHandler.Update)
+	api.DELETE("/:id", linksHandler.Delete)
 
 	router.GET("/api/link_visits", visitsHandler.List)
 
