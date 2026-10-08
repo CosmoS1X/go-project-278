@@ -66,13 +66,14 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
     `fakeVisitRecorder` (без БД); `repository_test.go` — интеграция на реальной БД.
 - `internal/service/visits/` — доменный слой сущности link_visits (пакет
   `visits`): тип `LinkVisit` + DTO (JSON-поле `reffer`), `handler.go`
-  (`ListVisits`, пагинация как у links), `repository.go` — интерфейс
-  `Repository` (`RecordVisit`, `ListVisits`) + реализация на sqlc.
+  (`List`, пагинация как у links), `repository.go` — интерфейс
+  `Repository` (`RecordVisit`, `List`) + реализация на sqlc.
   Тесты: `handler_test.go` юнит с фейком, `repository_test.go` интеграция.
-- `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c, errKey)`
-  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100) и
+- `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c)`
+  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100),
   `BindAndValidate(c, obj)` — биндинг JSON + валидация тегов `binding`
-  с единым форматом ошибок API.
+  с единым форматом ошибок API; константа `ErrKey` — общий JSON-ключ
+  для сообщений об ошибках (`{"error": ...}`).
 - `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
   схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
 - `db/migrations/` — миграции goose (SQL, последовательная нумерация).
