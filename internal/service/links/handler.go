@@ -13,8 +13,6 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 )
 
-const errKey = "error"
-
 type VisitRecorder interface {
 	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
 }
@@ -41,7 +39,7 @@ func (h *Handler) List(c *gin.Context) {
 
 	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list links"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list links"})
 		return
 	}
 
@@ -76,7 +74,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to generate short name"})
+			c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to generate short name"})
 			return
 		}
 		shortName = generated
@@ -88,7 +86,7 @@ func (h *Handler) Create(c *gin.Context) {
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to create link"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to create link"})
 		return
 	}
 
@@ -104,10 +102,10 @@ func (h *Handler) Get(c *gin.Context) {
 	item, err := h.repo.GetByID(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
+			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
 		return
 	}
 
@@ -132,11 +130,11 @@ func (h *Handler) Update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
+			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
 		case errors.Is(err, ErrShortNameTaken):
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to update link"})
+			c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to update link"})
 		}
 		return
 	}
@@ -151,7 +149,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to delete link"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to delete link"})
 		return
 	}
 
@@ -164,17 +162,17 @@ func (h *Handler) Redirect(c *gin.Context) {
 	link, err := h.repo.GetByShortName(c.Request.Context(), code)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
+			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
 		return
 	}
 
 	status := int32(http.StatusFound)
 
 	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to record visit"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to record visit"})
 		return
 	}
 
@@ -194,7 +192,7 @@ func (h *Handler) toResponse(item Link) response {
 func parseIDParam(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{httpapi.ErrKey: "invalid id"})
 		return 0, false
 	}
 	return id, true

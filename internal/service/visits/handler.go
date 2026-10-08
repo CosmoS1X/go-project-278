@@ -9,8 +9,6 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 )
 
-const errKey = "error"
-
 type Handler struct {
 	repo Repository
 }
@@ -27,7 +25,7 @@ func (h *Handler) ListVisits(c *gin.Context) {
 
 	items, total, err := h.repo.ListVisits(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list visits"})
+		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list visits"})
 		return
 	}
 
