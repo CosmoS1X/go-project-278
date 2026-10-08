@@ -81,11 +81,11 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	item, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
+	if errors.Is(err, ErrShortNameTaken) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrShortNameTaken) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to create link"})
 		return
 	}
@@ -100,11 +100,11 @@ func (h *Handler) Get(c *gin.Context) {
 	}
 
 	item, err := h.repo.GetByID(c.Request.Context(), id)
+	if errors.Is(err, ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
 		return
 	}
@@ -160,11 +160,11 @@ func (h *Handler) Redirect(c *gin.Context) {
 	code := c.Param("code")
 
 	link, err := h.repo.GetByShortName(c.Request.Context(), code)
+	if errors.Is(err, ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
 		return
 	}

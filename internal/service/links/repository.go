@@ -63,10 +63,10 @@ func (r *sqlcRepository) List(ctx context.Context, offset, limit int32) ([]Link,
 
 func (r *sqlcRepository) GetByID(ctx context.Context, id int64) (Link, error) {
 	row, err := r.queries.GetLinkByID(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Link{}, ErrNotFound
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return Link{}, ErrNotFound
-		}
 		return Link{}, fmt.Errorf("get link by id: %w", err)
 	}
 
@@ -78,10 +78,10 @@ func (r *sqlcRepository) Create(ctx context.Context, originalURL, shortName stri
 		OriginalUrl: originalURL,
 		ShortName:   shortName,
 	})
+	if isUniqueViolation(err) {
+		return Link{}, ErrShortNameTaken
+	}
 	if err != nil {
-		if isUniqueViolation(err) {
-			return Link{}, ErrShortNameTaken
-		}
 		return Link{}, fmt.Errorf("create link: %w", err)
 	}
 
@@ -94,13 +94,13 @@ func (r *sqlcRepository) Update(ctx context.Context, id int64, originalURL, shor
 		OriginalUrl: originalURL,
 		ShortName:   shortName,
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return Link{}, ErrNotFound
+	}
+	if isUniqueViolation(err) {
+		return Link{}, ErrShortNameTaken
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return Link{}, ErrNotFound
-		}
-		if isUniqueViolation(err) {
-			return Link{}, ErrShortNameTaken
-		}
 		return Link{}, fmt.Errorf("update link: %w", err)
 	}
 
@@ -117,10 +117,10 @@ func (r *sqlcRepository) Delete(ctx context.Context, id int64) error {
 
 func (r *sqlcRepository) GetByShortName(ctx context.Context, shortName string) (Link, error) {
 	row, err := r.queries.GetLinkByShortName(ctx, shortName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Link{}, ErrNotFound
+	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return Link{}, ErrNotFound
-		}
 		return Link{}, fmt.Errorf("get link by short name: %w", err)
 	}
 
