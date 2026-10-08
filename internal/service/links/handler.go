@@ -34,7 +34,7 @@ func NewHandler(repo Repository, recorder VisitRecorder, baseURL string) *Handle
 }
 
 func (h *Handler) List(c *gin.Context) {
-	offset, limit, ok := httpapi.ParseRangeParam(c, errKey)
+	offset, limit, ok := httpapi.ParseRangeParam(c)
 	if !ok {
 		return
 	}

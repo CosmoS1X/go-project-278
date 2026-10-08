@@ -20,7 +20,7 @@ func NewHandler(repo Repository) *Handler {
 }
 
 func (h *Handler) ListVisits(c *gin.Context) {
-	offset, limit, ok := httpapi.ParseRangeParam(c, errKey)
+	offset, limit, ok := httpapi.ParseRangeParam(c)
 	if !ok {
 		return
 	}
