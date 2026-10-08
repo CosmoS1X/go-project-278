@@ -37,7 +37,7 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
+	links, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list links"})
 		return
@@ -49,13 +49,13 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	resp := make([]response, 0, len(items))
-	for _, item := range items {
-		resp = append(resp, h.toResponse(item))
+	resp := make([]response, 0, len(links))
+	for _, link := range links {
+		resp = append(resp, h.toResponse(link))
 	}
 
-	end := int64(offset) + int64(len(items)) - 1
-	if len(items) == 0 {
+	end := int64(offset) + int64(len(links)) - 1
+	if len(links) == 0 {
 		end = int64(offset)
 	}
 	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, end, total))
@@ -80,7 +80,7 @@ func (h *Handler) Create(c *gin.Context) {
 		shortName = generated
 	}
 
-	item, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
+	link, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
 	if errors.Is(err, ErrShortNameTaken) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
 		return
@@ -90,7 +90,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, h.toResponse(item))
+	c.JSON(http.StatusCreated, h.toResponse(link))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -99,7 +99,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	item, err := h.repo.GetByID(c.Request.Context(), id)
+	link, err := h.repo.GetByID(c.Request.Context(), id)
 	if errors.Is(err, ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
 		return
@@ -109,7 +109,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.toResponse(item))
+	c.JSON(http.StatusOK, h.toResponse(link))
 }
 
 func (h *Handler) Update(c *gin.Context) {
@@ -126,7 +126,7 @@ func (h *Handler) Update(c *gin.Context) {
 	originalURL := strings.TrimSpace(req.OriginalURL)
 	shortName := strings.TrimSpace(req.ShortName)
 
-	item, err := h.repo.Update(c.Request.Context(), id, originalURL, shortName)
+	link, err := h.repo.Update(c.Request.Context(), id, originalURL, shortName)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
@@ -139,7 +139,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, h.toResponse(item))
+	c.JSON(http.StatusOK, h.toResponse(link))
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -157,9 +157,9 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) Redirect(c *gin.Context) {
-	code := c.Param("code")
+	codeParam := c.Param("code")
 
-	link, err := h.repo.GetByShortName(c.Request.Context(), code)
+	link, err := h.repo.GetByShortName(c.Request.Context(), codeParam)
 	if errors.Is(err, ErrNotFound) {
 		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
 		return
@@ -179,13 +179,13 @@ func (h *Handler) Redirect(c *gin.Context) {
 	c.Redirect(int(status), link.OriginalURL)
 }
 
-func (h *Handler) toResponse(item Link) response {
+func (h *Handler) toResponse(link Link) response {
 	return response{
-		ID:          item.ID,
-		OriginalURL: item.OriginalURL,
-		ShortName:   item.ShortName,
-		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, item.ShortName),
-		CreatedAt:   item.CreatedAt,
+		ID:          link.ID,
+		OriginalURL: link.OriginalURL,
+		ShortName:   link.ShortName,
+		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, link.ShortName),
+		CreatedAt:   link.CreatedAt,
 	}
 }
 

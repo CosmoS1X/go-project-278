@@ -14,13 +14,6 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
 )
 
-const uniqueViolation = "23505"
-
-const (
-	shortNameLength   = 8
-	shortNameAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-)
-
 type Repository interface {
 	List(ctx context.Context, offset, limit int32) ([]Link, int64, error)
 	GetByID(ctx context.Context, id int64) (Link, error)
@@ -127,6 +120,11 @@ func (r *sqlcRepository) GetByShortName(ctx context.Context, shortName string) (
 	return toLink(row), nil
 }
 
+const (
+	shortNameLength   = 8
+	shortNameAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+)
+
 func (r *sqlcRepository) GenerateShortName(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -161,7 +159,9 @@ func toLink(row sqlc.Link) Link {
 	}
 }
 
+const uniqueViolationCode = "23505"
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolation
+	return errors.As(err, &pgErr) && pgErr.Code == uniqueViolationCode
 }
