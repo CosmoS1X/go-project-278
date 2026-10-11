@@ -73,9 +73,8 @@ func doRequest(t *testing.T, router *gin.Engine, path string) *httptest.Response
 }
 
 func TestListVisits(t *testing.T) {
-	now := time.Now()
 	fake := &fakeRepository{visits: []LinkVisit{
-		{ID: 1, LinkID: 1, IP: sampleIP, Referer: "https://google.com", UserAgent: "Mozilla", Status: 302, CreatedAt: now},
+		{ID: 1, LinkID: 1, IP: sampleIP, Referer: "https://google.com", UserAgent: "Mozilla", Status: 302, CreatedAt: time.Now()},
 	}}
 	router := newTestHandler(fake)
 
@@ -89,10 +88,9 @@ func TestListVisits(t *testing.T) {
 }
 
 func TestListVisitsWithRange(t *testing.T) {
-	now := time.Now()
 	visits := make([]LinkVisit, 5)
 	for i := range visits {
-		visits[i] = LinkVisit{ID: int64(i + 1), LinkID: 1, IP: fmt.Sprintf("1.0.0.%d", i+1), Status: 302, CreatedAt: now}
+		visits[i] = LinkVisit{ID: int64(i + 1), LinkID: 1, IP: fmt.Sprintf("1.0.0.%d", i+1), Status: 302, CreatedAt: time.Now()}
 	}
 	fake := &fakeRepository{visits: visits}
 	router := newTestHandler(fake)

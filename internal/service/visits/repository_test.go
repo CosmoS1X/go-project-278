@@ -1,8 +1,6 @@
 package visits
 
 import (
-	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
+	"github.com/CosmoS1X/go-project-278/internal/testutil"
 )
 
 func newTestRepository(t *testing.T) (Repository, sqlc.DBTX) {
@@ -50,45 +49,6 @@ func createTestLink(t *testing.T, db sqlc.DBTX, shortName string) int64 {
 	require.NoError(t, err)
 
 	return link.ID
-}
-
-type errDBTX struct {
-	db *sql.DB
-}
-
-func (e *errDBTX) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return e.db.ExecContext(ctx, query, args...)
-}
-
-func (e *errDBTX) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	return e.db.PrepareContext(ctx, query)
-}
-
-func (e *errDBTX) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return e.db.QueryContext(ctx, query, args...)
-}
-
-func (e *errDBTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return e.db.QueryRowContext(ctx, query, args...)
-}
-
-func newClosedDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	db, err := sql.Open("pgx", "postgres://closed")
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	return db
-}
-
-type countFailTX struct {
-	sqlc.DBTX
-	closed *sql.DB
-}
-
-func (c *countFailTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return c.closed.QueryRowContext(ctx, query, args...)
 }
 
 func TestRepositoryRecordVisit(t *testing.T) {
@@ -136,7 +96,7 @@ func TestRepositoryListVisits(t *testing.T) {
 }
 
 func TestRepositoryListVisitsError(t *testing.T) {
-	repo := NewRepository(sqlc.New(&errDBTX{db: newClosedDB(t)}))
+	repo := NewRepository(sqlc.New(&testutil.ErrDBTX{DB: testutil.NewClosedDB(t)}))
 
 	_, _, err := repo.List(t.Context(), 0, 10)
 	require.Error(t, err)
@@ -145,9 +105,9 @@ func TestRepositoryListVisitsError(t *testing.T) {
 
 func TestRepositoryListVisitsCountError(t *testing.T) {
 	_, db := newTestRepository(t)
-	repo := NewRepository(sqlc.New(&countFailTX{
+	repo := NewRepository(sqlc.New(&testutil.CountFailTX{
 		DBTX:   db,
-		closed: newClosedDB(t),
+		Closed: testutil.NewClosedDB(t),
 	}))
 
 	_, _, err := repo.List(t.Context(), 0, 10)

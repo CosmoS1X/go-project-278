@@ -1,7 +1,6 @@
 package links
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
+	"github.com/CosmoS1X/go-project-278/internal/testutil"
 )
 
 func newTestRepositoryTx(t *testing.T) (Repository, *sql.Tx) {
@@ -48,49 +48,10 @@ func newTestRepository(t *testing.T) Repository {
 	return repo
 }
 
-type errDBTX struct {
-	db *sql.DB
-}
-
-func (e *errDBTX) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return e.db.ExecContext(ctx, query, args...)
-}
-
-func (e *errDBTX) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
-	return e.db.PrepareContext(ctx, query)
-}
-
-func (e *errDBTX) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return e.db.QueryContext(ctx, query, args...)
-}
-
-func (e *errDBTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return e.db.QueryRowContext(ctx, query, args...)
-}
-
-func newClosedDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	db, err := sql.Open("pgx", "postgres://closed")
-	require.NoError(t, err)
-	require.NoError(t, db.Close())
-
-	return db
-}
-
 func newStubRepository(t *testing.T) Repository {
 	t.Helper()
 
-	return NewRepository(sqlc.New(&errDBTX{db: newClosedDB(t)}))
-}
-
-type countFailTX struct {
-	sqlc.DBTX
-	closed *sql.DB
-}
-
-func (c *countFailTX) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return c.closed.QueryRowContext(ctx, query, args...)
+	return NewRepository(sqlc.New(&testutil.ErrDBTX{DB: testutil.NewClosedDB(t)}))
 }
 
 func TestRepositoryCreateAndGetByID(t *testing.T) {
@@ -282,9 +243,9 @@ func TestRepositoryErrorsOnClosedDB(t *testing.T) {
 
 func TestRepositoryListCountError(t *testing.T) {
 	_, tx := newTestRepositoryTx(t)
-	repo := NewRepository(sqlc.New(&countFailTX{
+	repo := NewRepository(sqlc.New(&testutil.CountFailTX{
 		DBTX:   tx,
-		closed: newClosedDB(t),
+		Closed: testutil.NewClosedDB(t),
 	}))
 
 	_, _, err := repo.List(t.Context(), 0, 10)
