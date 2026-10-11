@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/CosmoS1X/go-project-278/internal/config"
+	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 	"github.com/CosmoS1X/go-project-278/internal/service/links"
 	"github.com/CosmoS1X/go-project-278/internal/service/visits"
 	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
@@ -27,7 +28,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 		AllowHeaders:  []string{"Content-Type"},
 		ExposeHeaders: []string{"Content-Range"},
 	}))
-	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(gin.Logger(), gin.Recovery(), httpapi.Timeout(httpapi.DefaultTimeout))
 
 	router.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
