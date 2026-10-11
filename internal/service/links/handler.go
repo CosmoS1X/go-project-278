@@ -37,28 +37,20 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	links, total, err := h.repo.List(c.Request.Context(), offset, limit)
+	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list links"})
+		httpapi.InternalError(c, "failed to list links")
 		return
 	}
 
-	if int64(offset) >= total && total > 0 {
-		c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, offset, total))
-		c.Status(http.StatusRequestedRangeNotSatisfiable)
+	resp := make([]response, 0, len(items))
+	for _, item := range items {
+		resp = append(resp, h.toResponse(item))
+	}
+
+	if !httpapi.WriteRangeResponse(c, "links", offset, len(items), total) {
 		return
 	}
-
-	resp := make([]response, 0, len(links))
-	for _, link := range links {
-		resp = append(resp, h.toResponse(link))
-	}
-
-	end := int64(offset) + int64(len(links)) - 1
-	if len(links) == 0 {
-		end = int64(offset)
-	}
-	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -74,7 +66,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to generate short name"})
+			httpapi.InternalError(c, "failed to generate short name")
 			return
 		}
 		shortName = generated
@@ -82,11 +74,11 @@ func (h *Handler) Create(c *gin.Context) {
 
 	link, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
 	if errors.Is(err, ErrShortNameTaken) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
+		httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to create link"})
+		httpapi.InternalError(c, "failed to create link")
 		return
 	}
 
@@ -101,11 +93,11 @@ func (h *Handler) Get(c *gin.Context) {
 
 	link, err := h.repo.GetByID(c.Request.Context(), id)
 	if errors.Is(err, ErrNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
+		httpapi.NotFound(c, ErrNotFound.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
+		httpapi.InternalError(c, "failed to get link")
 		return
 	}
 
@@ -130,11 +122,11 @@ func (h *Handler) Update(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
+			httpapi.NotFound(c, ErrNotFound.Error())
 		case errors.Is(err, ErrShortNameTaken):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
+			httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to update link"})
+			httpapi.InternalError(c, "failed to update link")
 		}
 		return
 	}
@@ -149,7 +141,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to delete link"})
+		httpapi.InternalError(c, "failed to delete link")
 		return
 	}
 
@@ -161,22 +153,20 @@ func (h *Handler) Redirect(c *gin.Context) {
 
 	link, err := h.repo.GetByShortName(c.Request.Context(), codeParam)
 	if errors.Is(err, ErrNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{httpapi.ErrKey: ErrNotFound.Error()})
+		httpapi.NotFound(c, ErrNotFound.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to get link"})
+		httpapi.InternalError(c, "failed to get link")
 		return
 	}
 
-	status := int32(http.StatusFound)
-
-	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to record visit"})
+	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), http.StatusFound); err != nil {
+		httpapi.InternalError(c, "failed to record visit")
 		return
 	}
 
-	c.Redirect(int(status), link.OriginalURL)
+	c.Redirect(http.StatusFound, link.OriginalURL)
 }
 
 func (h *Handler) toResponse(link Link) response {
@@ -192,7 +182,7 @@ func (h *Handler) toResponse(link Link) response {
 func parseIDParam(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{httpapi.ErrKey: "invalid id"})
+		httpapi.BadRequest(c, "invalid id")
 		return 0, false
 	}
 	return id, true

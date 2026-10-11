@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,19 +22,19 @@ func ParseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
 
 	var pair [2]int32
 	if err := json.Unmarshal([]byte(rangeParam), &pair); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{ErrKey: "invalid range parameter"})
+		BadRequest(c, "invalid range parameter")
 		return 0, 0, false
 	}
 
 	start, end := pair[0], pair[1]
 	if start < 0 || end < start {
-		c.JSON(http.StatusBadRequest, gin.H{ErrKey: "invalid range: start must be >= 0 and end must be >= start"})
+		BadRequest(c, "invalid range: start must be >= 0 and end must be >= start")
 		return 0, 0, false
 	}
 
 	limit = end - start + 1
 	if limit > MaxLimit {
-		c.JSON(http.StatusBadRequest, gin.H{ErrKey: fmt.Sprintf("range exceeds max limit of %d", MaxLimit)})
+		BadRequest(c, fmt.Sprintf("range exceeds max limit of %d", MaxLimit))
 		return 0, 0, false
 	}
 

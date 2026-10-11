@@ -1,7 +1,6 @@
 package visits
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,31 +22,19 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	visits, total, err := h.repo.List(c.Request.Context(), offset, limit)
+	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{httpapi.ErrKey: "failed to list visits"})
+		httpapi.InternalError(c, "failed to list visits")
 		return
 	}
 
-	if int64(offset) >= total && total > 0 {
-		c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, offset, total))
-		c.Status(http.StatusRequestedRangeNotSatisfiable)
+	resp := make([]response, 0, len(items))
+	for _, item := range items {
+		resp = append(resp, response(item))
+	}
+
+	if !httpapi.WriteRangeResponse(c, "link_visits", offset, len(items), total) {
 		return
 	}
-
-	resp := make([]response, 0, len(visits))
-	for _, visit := range visits {
-		resp = append(resp, toResponse(&visit))
-	}
-
-	end := int64(offset) + int64(len(visits)) - 1
-	if len(visits) == 0 {
-		end = int64(offset)
-	}
-	c.Header("Content-Range", fmt.Sprintf("link_visits %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
-}
-
-func toResponse(visit *LinkVisit) response {
-	return response(*visit)
 }

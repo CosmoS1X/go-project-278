@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"errors"
-	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -35,10 +34,10 @@ func BindAndValidate(c *gin.Context, obj any) bool {
 			for _, fe := range validationErrs {
 				errs[fe.Field()] = fe.Error()
 			}
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": errs})
+			ValidationErrors(c, errs)
 			return false
 		}
-		c.JSON(http.StatusBadRequest, gin.H{ErrKey: "invalid request"})
+		BadRequest(c, "invalid request")
 		return false
 	}
 	return true
