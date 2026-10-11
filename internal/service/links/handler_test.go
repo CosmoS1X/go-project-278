@@ -282,6 +282,25 @@ func TestCreateLinkShortNameTooLong(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"short_name"`)
 }
 
+func TestCreateLinkShortNameTrimmedTooShort(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "  ab  "}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+}
+
+func TestCreateLinkTrimsShortName(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "https://example.com", "short_name": "  exmpl  "}`)
+	require.Equal(t, http.StatusCreated, w.Code)
+	assert.Contains(t, w.Body.String(), `"short_name":"exmpl"`)
+}
+
 func TestGetLink(t *testing.T) {
 	fake := &fakeRepository{links: []Link{{ID: 1, OriginalURL: sampleOriginalURL, ShortName: sampleShortName, CreatedAt: time.Now()}}}
 	router := newTestHandler(fake, nil)

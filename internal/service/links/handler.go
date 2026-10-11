@@ -60,9 +60,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	originalURL := strings.TrimSpace(req.OriginalURL)
-	shortName := strings.TrimSpace(req.ShortName)
-
+	shortName := req.ShortName
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
 		if err != nil {
@@ -72,7 +70,7 @@ func (h *Handler) Create(c *gin.Context) {
 		shortName = generated
 	}
 
-	link, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
+	link, err := h.repo.Create(c.Request.Context(), req.OriginalURL, shortName)
 	if errors.Is(err, ErrShortNameTaken) {
 		httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
 		return
@@ -115,10 +113,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	originalURL := strings.TrimSpace(req.OriginalURL)
-	shortName := strings.TrimSpace(req.ShortName)
-
-	link, err := h.repo.Update(c.Request.Context(), id, originalURL, shortName)
+	link, err := h.repo.Update(c.Request.Context(), id, req.OriginalURL, req.ShortName)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
