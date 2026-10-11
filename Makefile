@@ -37,7 +37,7 @@ test-bench:
 	go test -bench=. -benchmem
 
 test-coverage:
-	go test -v -cover -coverprofile=coverage.out ./...
+	go test -v -coverpkg=./... -coverprofile=coverage.out ./...
 
 show-coverage:
 	go tool cover -html=coverage.out
