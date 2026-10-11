@@ -3,5 +3,6 @@
 /tmp/
 .vscode
 coverage.out
+coverage.html
 .env
 node_modules

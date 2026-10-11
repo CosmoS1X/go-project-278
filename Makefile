@@ -1,4 +1,4 @@
-.PHONY: tidy fmt build run clean test test-race test-bench test-coverage show-coverage lint lint-fix dev dev-backend dev-frontend vuln sqlc-generate migrate-up migrate-down
+.PHONY: tidy fmt build run clean test test-race test-bench test-coverage coverage-func coverage-html coverage-show lint lint-fix dev dev-backend dev-frontend vuln sqlc-generate migrate-up migrate-down
 
 MIGRATIONS_DIR := db/migrations
 -include .env
@@ -25,7 +25,7 @@ run: build
 	./bin/server
 
 clean:
-	rm -rf ./bin/server coverage.out
+	rm -rf ./bin/server coverage.out coverage.html
 
 test:
 	go test -v ./...
@@ -39,7 +39,13 @@ test-bench:
 test-coverage:
 	go test -v -coverpkg=./... -coverprofile=coverage.out ./...
 
-show-coverage:
+coverage-func: test-coverage
+	go tool cover -func=coverage.out
+
+coverage-html: test-coverage
+	go tool cover -html=coverage.out -o coverage.html
+
+coverage-show: test-coverage
 	go tool cover -html=coverage.out
 
 lint: fmt
