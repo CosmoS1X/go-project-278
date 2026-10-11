@@ -27,7 +27,7 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 | `sqlc-generate` | сгенерировать код sqlc (`cd internal/storage/sqlc && sqlc generate`) |
 | `migrate-up`  | применить миграции goose (`-dir db/migrations`) |
 | `migrate-down`| откатить миграции goose                       |
-| `tidy`, `clean`, `test-race`, `test-coverage`, `show-coverage`, `vuln` | см. Makefile |
+| `tidy`, `clean`, `test-race`, `test-bench`, `test-coverage`, `coverage-func`, `coverage-html`, `coverage-show`, `vuln` | см. Makefile |
 
 Перед завершением задачи обязательно: `make test && make lint`.
 
@@ -38,13 +38,15 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 ## Структура
 
 - `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
-  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + SERVER_PORT)`.
+  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + SERVER_PORT)`;
+  стартовый `pool.Ping` ограничен `context.WithTimeout` (5s).
 - `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
   `BASE_SHORT_URL`, `SERVER_PORT` (default `8080`), `CORS_ORIGIN` (default
   `http://localhost:5173`).
 - `internal/app/app.go` — NewRouter(): CORS (gin-contrib/cors) + gin.Logger +
-  gin.Recovery + маршруты; тонкий слой, только сборка роутера; принимает
-  `sqlc.DBTX` (совместим с `*sql.DB` и `*sql.Tx`).
+  gin.Recovery + `httpapi.Timeout(httpapi.DefaultTimeout)` (5s на весь роутер:
+  `c.Request.Context()` получает дедлайн) + маршруты; тонкий слой, только
+  сборка роутера; принимает `sqlc.DBTX` (совместим с `*sql.DB` и `*sql.Tx`).
   Маршруты: `/ping`, `GET /r/:code` (редирект), `/api/links*`, `GET /api/link_visits`.
   `router.TrustedPlatform = gin.PlatformCloudflare` — корректный ClientIP
   (нужен статистике посещений) при работе за Cloudflare.
@@ -61,7 +63,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   - `errors.go` — sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`.
   - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`);
     request-DTO с тегами валидации `binding` (`original_url`: required+url,
-    `short_name`: omitempty+min3/max32).
+    `short_name`: omitempty+min3/max32) и методом `Normalize()` (TrimSpace,
+    вызывается из `BindAndValidate` до валидации).
   - Тесты: `handler_test.go` — юнит с фейковым `Repository` и
     `fakeVisitRecorder` (без БД); `repository_test.go` — интеграция на реальной БД.
 - `internal/service/visits/` — доменный слой сущности link_visits (пакет
@@ -72,8 +75,11 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 - `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c)`
   (инклюзивный `range=[start,end]`, дефолт 10, максимум 100),
   `BindAndValidate(c, obj)` — биндинг JSON + валидация тегов `binding`
-  с единым форматом ошибок API; константа `ErrKey` — общий JSON-ключ
-  для сообщений об ошибках (`{"error": ...}`).
+  с единым форматом ошибок API; `Timeout(d)` — мидлварь, навешивающая
+  `context.WithTimeout` на `c.Request.Context()` (дефолт `DefaultTimeout` = 5s);
+  хелперы ответов `WriteRangeResponse`/`BadRequest`/`InternalError`/
+  `ServerError`/`NotFound`/`ValidationError(s)`; константа `ErrKey` — общий
+  JSON-ключ для сообщений об ошибках (`{"error": ...}`).
 - `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
   схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
 - `db/migrations/` — миграции goose (SQL, последовательная нумерация).
@@ -99,6 +105,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   из JSON-тегов DTO); некорректный JSON → `400 {"error": "invalid request"}`.
   Конфликт уникальности `short_name` → `422 {"errors": {"short_name":
   "short name already in use"}}` (маппится из sentinel `ErrShortNameTaken`).
+  Превышение таймаута контекста (`context.DeadlineExceeded`) → `504
+  {"error": ...}` (хелпер `httpapi.ServerError`), прочие ошибки БД → `500`.
 - НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
 
 ## Фронтенд и деплой
