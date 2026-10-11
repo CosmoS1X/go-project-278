@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -28,6 +30,14 @@ func BadRequest(c *gin.Context, msg string) {
 
 func InternalError(c *gin.Context, msg string) {
 	c.JSON(http.StatusInternalServerError, gin.H{ErrKey: msg})
+}
+
+func ServerError(c *gin.Context, err error, msg string) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		c.JSON(http.StatusGatewayTimeout, gin.H{ErrKey: msg})
+		return
+	}
+	InternalError(c, msg)
 }
 
 func NotFound(c *gin.Context, msg string) {

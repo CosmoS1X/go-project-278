@@ -39,7 +39,7 @@ func (h *Handler) List(c *gin.Context) {
 
 	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		httpapi.InternalError(c, "failed to list links")
+		httpapi.ServerError(c, err, "failed to list links")
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
 		if err != nil {
-			httpapi.InternalError(c, "failed to generate short name")
+			httpapi.ServerError(c, err, "failed to generate short name")
 			return
 		}
 		shortName = generated
@@ -76,7 +76,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		httpapi.InternalError(c, "failed to create link")
+		httpapi.ServerError(c, err, "failed to create link")
 		return
 	}
 
@@ -95,7 +95,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		httpapi.InternalError(c, "failed to get link")
+		httpapi.ServerError(c, err, "failed to get link")
 		return
 	}
 
@@ -121,7 +121,7 @@ func (h *Handler) Update(c *gin.Context) {
 		case errors.Is(err, ErrShortNameTaken):
 			httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
 		default:
-			httpapi.InternalError(c, "failed to update link")
+			httpapi.ServerError(c, err, "failed to update link")
 		}
 		return
 	}
@@ -136,7 +136,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
-		httpapi.InternalError(c, "failed to delete link")
+		httpapi.ServerError(c, err, "failed to delete link")
 		return
 	}
 
@@ -152,12 +152,12 @@ func (h *Handler) Redirect(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		httpapi.InternalError(c, "failed to get link")
+		httpapi.ServerError(c, err, "failed to get link")
 		return
 	}
 
 	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), http.StatusFound); err != nil {
-		httpapi.InternalError(c, "failed to record visit")
+		httpapi.ServerError(c, err, "failed to record visit")
 		return
 	}
 

@@ -141,3 +141,12 @@ func TestListVisitsRepositoryError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Contains(t, w.Body.String(), "failed to list visits")
 }
+
+func TestListVisitsTimeout(t *testing.T) {
+	fake := &fakeRepository{listErr: context.DeadlineExceeded}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, "/api/link_visits")
+	assert.Equal(t, http.StatusGatewayTimeout, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list visits")
+}

@@ -488,6 +488,15 @@ func TestListLinksRepositoryError(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "failed to list links")
 }
 
+func TestListLinksTimeout(t *testing.T) {
+	fake := &fakeRepository{listErr: context.DeadlineExceeded}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodGet, "/api/links", "")
+	assert.Equal(t, http.StatusGatewayTimeout, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list links")
+}
+
 func TestCreateLinkRepositoryError(t *testing.T) {
 	fake := &fakeRepository{createErr: errors.New("boom")}
 	router := newTestHandler(fake, nil)

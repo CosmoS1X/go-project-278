@@ -24,7 +24,7 @@ func (h *Handler) List(c *gin.Context) {
 
 	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		httpapi.InternalError(c, "failed to list visits")
+		httpapi.ServerError(c, err, "failed to list visits")
 		return
 	}
 
