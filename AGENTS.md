@@ -64,7 +64,7 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
     `GetByShortName(ctx, shortName)` (для редиректа);
   - `errors.go` — sentinel-ошибки `ErrNotFound` / `ErrShortNameTaken`.
   - `links.go` — доменный тип `Link` + DTO (с вычисляемым `short_url`);
-    request-DTO с тегами валидации `binding` (`original_url`: required+url,
+    request-DTO с тегами валидации `binding` (`original_url`: required+http_url,
     `short_name`: omitempty+min3/max32) и методом `Normalize()` (TrimSpace,
     вызывается из `BindAndValidate` до валидации).
   - Тесты: `handler_test.go` — юнит с фейковым `Repository` и

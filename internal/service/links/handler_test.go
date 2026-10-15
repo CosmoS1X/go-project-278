@@ -262,6 +262,16 @@ func TestCreateLinkInvalidURL(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"original_url"`)
 }
 
+func TestCreateLinkNonHTTPURL(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodPost, "/api/links", `{"original_url": "javascript:alert(1)"}`)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
+}
+
 func TestCreateLinkShortNameTooShort(t *testing.T) {
 	fake := &fakeRepository{}
 	router := newTestHandler(fake, nil)
