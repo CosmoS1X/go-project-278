@@ -107,7 +107,7 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   из JSON-тегов DTO); некорректный JSON → `400 {"error": "invalid request"}`.
   Конфликт уникальности `short_name` → `422 {"errors": {"short_name":
   "short name already in use"}}` (маппится из sentinel `ErrShortNameTaken`).
-  Превышение таймаута контекста (`context.DeadlineExceeded`) → `504
+  Превышение таймаута контекста (`context.DeadlineExceeded`) → `503
   {"error": ...}` (хелпер `httpapi.ServerError`), прочие ошибки БД → `500`.
 - НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
 

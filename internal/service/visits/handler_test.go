@@ -147,6 +147,6 @@ func TestListVisitsTimeout(t *testing.T) {
 	router := newTestHandler(fake)
 
 	w := doRequest(t, router, "/api/link_visits")
-	assert.Equal(t, http.StatusGatewayTimeout, w.Code)
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Contains(t, w.Body.String(), "failed to list visits")
 }

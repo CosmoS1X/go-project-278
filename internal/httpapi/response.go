@@ -34,7 +34,7 @@ func InternalError(c *gin.Context, msg string) {
 
 func ServerError(c *gin.Context, err error, msg string) {
 	if errors.Is(err, context.DeadlineExceeded) {
-		c.JSON(http.StatusGatewayTimeout, gin.H{ErrKey: msg})
+		c.JSON(http.StatusServiceUnavailable, gin.H{ErrKey: msg})
 		return
 	}
 	InternalError(c, msg)
