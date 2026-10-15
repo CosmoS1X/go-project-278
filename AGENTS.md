@@ -38,8 +38,10 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 ## Структура
 
 - `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
-  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `router.Run(":" + SERVER_PORT)`;
-  стартовый `pool.Ping` ограничен `context.WithTimeout` (5s).
+  `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `http.Server` с
+  таймаутами (ReadHeader/Read/Write/Idle) и graceful shutdown по
+  SIGINT/SIGTERM (`signal.NotifyContext` + `srv.Shutdown`); стартовый
+  `pool.Ping` ограничен `context.WithTimeout` (5s).
 - `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
   `BASE_SHORT_URL`, `SERVER_PORT` (default `8080`), `CORS_ORIGIN` (default
   `http://localhost:5173`).
