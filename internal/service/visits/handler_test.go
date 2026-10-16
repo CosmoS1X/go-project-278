@@ -34,7 +34,7 @@ func (f *fakeRepository) RecordVisit(_ context.Context, linkID int64, referer, i
 	return nil
 }
 
-func (f *fakeRepository) ListVisits(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
+func (f *fakeRepository) List(_ context.Context, offset, limit int32) ([]LinkVisit, int64, error) {
 	if f.listErr != nil {
 		return nil, 0, f.listErr
 	}
@@ -55,7 +55,7 @@ func newTestHandler(repo Repository) *gin.Engine {
 	handler := NewHandler(repo)
 
 	router := gin.New()
-	router.GET("/api/link_visits", handler.ListVisits)
+	router.GET("/api/link_visits", handler.List)
 
 	return router
 }
@@ -73,9 +73,8 @@ func doRequest(t *testing.T, router *gin.Engine, path string) *httptest.Response
 }
 
 func TestListVisits(t *testing.T) {
-	now := time.Now()
 	fake := &fakeRepository{visits: []LinkVisit{
-		{ID: 1, LinkID: 1, IP: sampleIP, Referer: "https://google.com", UserAgent: "Mozilla", Status: 302, CreatedAt: now},
+		{ID: 1, LinkID: 1, IP: sampleIP, Referer: "https://google.com", UserAgent: "Mozilla", Status: 302, CreatedAt: time.Now()},
 	}}
 	router := newTestHandler(fake)
 
@@ -89,10 +88,9 @@ func TestListVisits(t *testing.T) {
 }
 
 func TestListVisitsWithRange(t *testing.T) {
-	now := time.Now()
 	visits := make([]LinkVisit, 5)
 	for i := range visits {
-		visits[i] = LinkVisit{ID: int64(i + 1), LinkID: 1, IP: fmt.Sprintf("1.0.0.%d", i+1), Status: 302, CreatedAt: now}
+		visits[i] = LinkVisit{ID: int64(i + 1), LinkID: 1, IP: fmt.Sprintf("1.0.0.%d", i+1), Status: 302, CreatedAt: time.Now()}
 	}
 	fake := &fakeRepository{visits: visits}
 	router := newTestHandler(fake)
@@ -141,5 +139,14 @@ func TestListVisitsRepositoryError(t *testing.T) {
 
 	w := doRequest(t, router, "/api/link_visits")
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list visits")
+}
+
+func TestListVisitsTimeout(t *testing.T) {
+	fake := &fakeRepository{listErr: context.DeadlineExceeded}
+	router := newTestHandler(fake)
+
+	w := doRequest(t, router, "/api/link_visits")
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.Contains(t, w.Body.String(), "failed to list visits")
 }

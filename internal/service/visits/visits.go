@@ -22,7 +22,3 @@ type response struct {
 	Referer   string    `json:"reffer"`
 	CreatedAt time.Time `json:"created_at"`
 }
-
-func toResponse(v *LinkVisit) response {
-	return response(*v)
-}

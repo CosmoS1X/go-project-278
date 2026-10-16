@@ -1,8 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
-	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -26,19 +26,32 @@ var registerJSONTagNames = sync.OnceFunc(func() {
 	})
 })
 
+type normalizer interface {
+	Normalize()
+}
+
 func BindAndValidate(c *gin.Context, obj any) bool {
 	registerJSONTagNames()
 
-	if err := c.ShouldBindJSON(obj); err != nil {
+	if err := json.NewDecoder(c.Request.Body).Decode(obj); err != nil {
+		BadRequest(c, "invalid request")
+		return false
+	}
+
+	if n, ok := obj.(normalizer); ok {
+		n.Normalize()
+	}
+
+	if err := binding.Validator.ValidateStruct(obj); err != nil {
 		if validationErrs, ok := errors.AsType[validator.ValidationErrors](err); ok {
 			errs := make(map[string]string, len(validationErrs))
 			for _, fe := range validationErrs {
 				errs[fe.Field()] = fe.Error()
 			}
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": errs})
+			ValidationErrors(c, errs)
 			return false
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		BadRequest(c, "invalid request")
 		return false
 	}
 	return true

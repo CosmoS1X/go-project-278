@@ -11,14 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const errKey = "error"
-
 func newRangeRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
 	router.GET("/range", func(c *gin.Context) {
-		offset, limit, ok := ParseRangeParam(c, errKey)
+		offset, limit, ok := ParseRangeParam(c)
 		if !ok {
 			return
 		}

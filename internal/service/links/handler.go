@@ -13,8 +13,6 @@ import (
 	"github.com/CosmoS1X/go-project-278/internal/httpapi"
 )
 
-const errKey = "error"
-
 type VisitRecorder interface {
 	RecordVisit(ctx context.Context, linkID int64, referer, ip, userAgent string, status int32) error
 }
@@ -34,20 +32,14 @@ func NewHandler(repo Repository, recorder VisitRecorder, baseURL string) *Handle
 }
 
 func (h *Handler) List(c *gin.Context) {
-	offset, limit, ok := httpapi.ParseRangeParam(c, errKey)
+	offset, limit, ok := httpapi.ParseRangeParam(c)
 	if !ok {
 		return
 	}
 
 	items, total, err := h.repo.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to list links"})
-		return
-	}
-
-	if int64(offset) >= total && total > 0 {
-		c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, offset, total))
-		c.Status(http.StatusRequestedRangeNotSatisfiable)
+		httpapi.ServerError(c, err, "failed to list links")
 		return
 	}
 
@@ -56,11 +48,9 @@ func (h *Handler) List(c *gin.Context) {
 		resp = append(resp, h.toResponse(item))
 	}
 
-	end := int64(offset) + int64(len(items)) - 1
-	if len(items) == 0 {
-		end = int64(offset)
+	if !httpapi.WriteRangeResponse(c, "links", offset, len(items), total) {
+		return
 	}
-	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", offset, end, total))
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -70,29 +60,27 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	originalURL := strings.TrimSpace(req.OriginalURL)
-	shortName := strings.TrimSpace(req.ShortName)
-
+	shortName := req.ShortName
 	if shortName == "" {
 		generated, err := h.repo.GenerateShortName(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to generate short name"})
+			httpapi.ServerError(c, err, "failed to generate short name")
 			return
 		}
 		shortName = generated
 	}
 
-	item, err := h.repo.Create(c.Request.Context(), originalURL, shortName)
+	link, err := h.repo.Create(c.Request.Context(), req.OriginalURL, shortName)
+	if errors.Is(err, ErrShortNameTaken) {
+		httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrShortNameTaken) {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to create link"})
+		httpapi.ServerError(c, err, "failed to create link")
 		return
 	}
 
-	c.JSON(http.StatusCreated, h.toResponse(item))
+	c.JSON(http.StatusCreated, h.toResponse(link))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -101,17 +89,17 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	item, err := h.repo.GetByID(c.Request.Context(), id)
+	link, err := h.repo.GetByID(c.Request.Context(), id)
+	if errors.Is(err, ErrNotFound) {
+		httpapi.NotFound(c, ErrNotFound.Error())
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		httpapi.ServerError(c, err, "failed to get link")
 		return
 	}
 
-	c.JSON(http.StatusOK, h.toResponse(item))
+	c.JSON(http.StatusOK, h.toResponse(link))
 }
 
 func (h *Handler) Update(c *gin.Context) {
@@ -125,23 +113,20 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	originalURL := strings.TrimSpace(req.OriginalURL)
-	shortName := strings.TrimSpace(req.ShortName)
-
-	item, err := h.repo.Update(c.Request.Context(), id, originalURL, shortName)
+	link, err := h.repo.Update(c.Request.Context(), id, req.OriginalURL, req.ShortName)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
+			httpapi.NotFound(c, ErrNotFound.Error())
 		case errors.Is(err, ErrShortNameTaken):
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": gin.H{"short_name": ErrShortNameTaken.Error()}})
+			httpapi.ValidationError(c, "short_name", ErrShortNameTaken.Error())
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to update link"})
+			httpapi.ServerError(c, err, "failed to update link")
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, h.toResponse(item))
+	c.JSON(http.StatusOK, h.toResponse(link))
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -151,7 +136,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to delete link"})
+		httpapi.ServerError(c, err, "failed to delete link")
 		return
 	}
 
@@ -159,42 +144,40 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) Redirect(c *gin.Context) {
-	code := c.Param("code")
+	codeParam := c.Param("code")
 
-	link, err := h.repo.GetByShortName(c.Request.Context(), code)
+	link, err := h.repo.GetByShortName(c.Request.Context(), codeParam)
+	if errors.Is(err, ErrNotFound) {
+		httpapi.NotFound(c, ErrNotFound.Error())
+		return
+	}
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{errKey: ErrNotFound.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to get link"})
+		httpapi.ServerError(c, err, "failed to get link")
 		return
 	}
 
-	status := int32(http.StatusFound)
-
-	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{errKey: "failed to record visit"})
+	if err := h.recorder.RecordVisit(c.Request.Context(), link.ID, c.Request.Referer(), c.ClientIP(), c.Request.UserAgent(), http.StatusFound); err != nil {
+		httpapi.ServerError(c, err, "failed to record visit")
 		return
 	}
 
-	c.Redirect(int(status), link.OriginalURL)
+	c.Redirect(http.StatusFound, link.OriginalURL)
 }
 
-func (h *Handler) toResponse(item Link) response {
+func (h *Handler) toResponse(link Link) response {
 	return response{
-		ID:          item.ID,
-		OriginalURL: item.OriginalURL,
-		ShortName:   item.ShortName,
-		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, item.ShortName),
-		CreatedAt:   item.CreatedAt,
+		ID:          link.ID,
+		OriginalURL: link.OriginalURL,
+		ShortName:   link.ShortName,
+		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, link.ShortName),
+		CreatedAt:   link.CreatedAt,
 	}
 }
 
 func parseIDParam(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{errKey: "invalid id"})
+		httpapi.BadRequest(c, "invalid id")
 		return 0, false
 	}
 	return id, true

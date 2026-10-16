@@ -1,6 +1,7 @@
 package links
 
 import (
+	"strings"
 	"time"
 )
 
@@ -12,8 +13,13 @@ type Link struct {
 }
 
 type request struct {
-	OriginalURL string `json:"original_url" binding:"required,url"`
+	OriginalURL string `json:"original_url" binding:"required,http_url"`
 	ShortName   string `json:"short_name"   binding:"omitempty,min=3,max=32"`
+}
+
+func (r *request) Normalize() {
+	r.OriginalURL = strings.TrimSpace(r.OriginalURL)
+	r.ShortName = strings.TrimSpace(r.ShortName)
 }
 
 type response struct {
