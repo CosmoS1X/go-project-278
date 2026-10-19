@@ -126,7 +126,7 @@ func (f *fakeRepository) Delete(_ context.Context, id int64) error {
 			return nil
 		}
 	}
-	return nil
+	return ErrNotFound
 }
 
 func (f *fakeRepository) GenerateShortName(_ context.Context) (string, error) {
@@ -571,6 +571,15 @@ func TestDeleteLinkInvalidID(t *testing.T) {
 	w := doRequest(t, router, http.MethodDelete, "/api/links/abc", "")
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "invalid id")
+}
+
+func TestDeleteLinkNotFound(t *testing.T) {
+	fake := &fakeRepository{}
+	router := newTestHandler(fake, nil)
+
+	w := doRequest(t, router, http.MethodDelete, "/api/links/1", "")
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), ErrNotFound.Error())
 }
 
 func TestDeleteLinkRepositoryError(t *testing.T) {

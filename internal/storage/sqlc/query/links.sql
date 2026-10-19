@@ -28,6 +28,6 @@ SET original_url = $1, short_name = $2
 WHERE id = $3
 RETURNING id, original_url, short_name, created_at;
 
--- name: DeleteLink :exec
+-- name: DeleteLink :execrows
 DELETE FROM links
 WHERE id = $1;

@@ -101,8 +101,12 @@ func (r *sqlcRepository) Update(ctx context.Context, id int64, originalURL, shor
 }
 
 func (r *sqlcRepository) Delete(ctx context.Context, id int64) error {
-	if err := r.queries.DeleteLink(ctx, id); err != nil {
+	rows, err := r.queries.DeleteLink(ctx, id)
+	if err != nil {
 		return fmt.Errorf("delete link: %w", err)
+	}
+	if rows == 0 {
+		return ErrNotFound
 	}
 
 	return nil

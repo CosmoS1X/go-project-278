@@ -136,6 +136,10 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			httpapi.NotFound(c, ErrNotFound.Error())
+			return
+		}
 		httpapi.ServerError(c, err, "failed to delete link")
 		return
 	}

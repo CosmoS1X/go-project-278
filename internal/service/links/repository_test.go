@@ -144,6 +144,9 @@ func TestRepositoryDelete(t *testing.T) {
 
 	_, err = repo.GetByID(t.Context(), created.ID)
 	assert.True(t, errors.Is(err, ErrNotFound))
+
+	err = repo.Delete(t.Context(), created.ID)
+	assert.True(t, errors.Is(err, ErrNotFound))
 }
 
 func TestRepositoryGenerateShortName(t *testing.T) {
