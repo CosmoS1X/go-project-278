@@ -19,7 +19,7 @@ fmt:
 	golangci-lint fmt
 
 build:
-	go build -o ./bin/server ./cmd/server
+	go build -o ./bin/server .
 
 run: build
 	./bin/server
