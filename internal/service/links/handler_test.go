@@ -153,7 +153,7 @@ func newTestHandler(repo Repository, recorder VisitRecorder) *gin.Engine {
 	if recorder == nil {
 		recorder = &fakeVisitRecorder{}
 	}
-	handler := NewHandler(repo, recorder, "https://short.io/r")
+	handler := NewHandler(repo, recorder, "https://short.io")
 
 	router := gin.New()
 	router.GET("/r/:code", handler.Redirect)

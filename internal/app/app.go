@@ -17,7 +17,7 @@ func NewRouter(db sqlc.DBTX, cfg *config.Config) *gin.Engine {
 	queries := sqlc.New(db)
 	linksRepo := links.NewRepository(queries)
 	visitsRepo := visits.NewRepository(queries)
-	linksHandler := links.NewHandler(linksRepo, visitsRepo, cfg.BaseShortURL)
+	linksHandler := links.NewHandler(linksRepo, visitsRepo, cfg.BaseURL)
 	visitsHandler := visits.NewHandler(visitsRepo)
 
 	router := gin.New()

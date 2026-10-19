@@ -25,7 +25,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db?sslmode=disable
-      BASE_SHORT_URL: https://short.io/r
+      BASE_URL: https://short.io
 
     steps:
     - uses: actions/checkout@v7

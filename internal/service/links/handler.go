@@ -169,7 +169,7 @@ func (h *Handler) toResponse(link Link) response {
 		ID:          link.ID,
 		OriginalURL: link.OriginalURL,
 		ShortName:   link.ShortName,
-		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, link.ShortName),
+		ShortURL:    fmt.Sprintf("%s/r/%s", h.baseURL, link.ShortName),
 		CreatedAt:   link.CreatedAt,
 	}
 }
