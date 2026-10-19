@@ -19,14 +19,14 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 | `test`        | go test -v ./...                              |
 | `lint`        | golangci-lint fmt + golangci-lint run         |
 | `lint-fix`    | автоправки линтера                            |
-| `build`       | go build -o ./bin/server ./cmd/server         |
+| `build`       | go build -o ./bin/server .                    |
 | `run`         | собрать и запустить `./bin/server`            |
 | `dev`         | запустить бэкенд (air) и фронтенд (vite preview) вместе через concurrently |
 | `dev-backend` | только air (hot-reload) |
 | `dev-frontend`| только фронтенд (`npm exec start-hexlet-url-shortener-frontend`) |
-| `sqlc-generate` | сгенерировать код sqlc (`cd internal/storage/sqlc && sqlc generate`) |
-| `migrate-up`  | применить миграции goose (`-dir db/migrations`) |
-| `migrate-down`| откатить миграции goose                       |
+| `sqlc-generate` | сгенерировать код sqlc (`cd internal/storage/sqlc && go tool sqlc generate`) |
+| `migrate-up`  | применить миграции goose (`go tool goose -dir db/migrations`) |
+| `migrate-down`| откатить миграции goose (`go tool goose`)     |
 | `tidy`, `clean`, `test-race`, `test-bench`, `test-coverage`, `coverage-func`, `coverage-html`, `coverage-show`, `vuln` | см. Makefile |
 
 Перед завершением задачи обязательно: `make test && make lint`.
@@ -37,13 +37,13 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
 
 ## Структура
 
-- `cmd/server/main.go` — точка входа: godotenv → `config.Load` → pgxpool →
+- `main.go` (корень репозитория) — точка входа: godotenv → `config.Load` → pgxpool →
   `stdlib.OpenDBFromPool` → `app.NewRouter(db, cfg)` → `http.Server` с
   таймаутами (ReadHeader/Read/Write/Idle) и graceful shutdown по
   SIGINT/SIGTERM (`signal.NotifyContext` + `srv.Shutdown`); стартовый
   `pool.Ping` ограничен `context.WithTimeout` (5s).
 - `internal/config/config.go` — конфиг через caarlos0/env: `DATABASE_URL`,
-  `BASE_SHORT_URL`, `SERVER_PORT` (default `8080`), `CORS_ORIGIN` (default
+  `BASE_URL` (origin без `/r`), `SERVER_PORT` (default `8080`), `CORS_ORIGIN` (default
   `http://localhost:5173`).
 - `internal/app/app.go` — NewRouter(): CORS (gin-contrib/cors) + gin.Logger +
   gin.Recovery + `httpapi.Timeout(httpapi.DefaultTimeout)` (5s на весь роутер:
@@ -75,7 +75,7 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   `Repository` (`RecordVisit`, `List`) + реализация на sqlc.
   Тесты: `handler_test.go` юнит с фейком, `repository_test.go` интеграция.
 - `internal/httpapi/` — общие HTTP-хелперы: `ParseRangeParam(c)`
-  (инклюзивный `range=[start,end]`, дефолт 10, максимум 100),
+  (инклюзивный `range=[start,end]`, дефолт 10, с усечением до 100),
   `BindAndValidate(c, obj)` — биндинг JSON + валидация тегов `binding`
   с единым форматом ошибок API; `Timeout(d)` — мидлварь, навешивающая
   `context.WithTimeout` на `c.Request.Context()` (дефолт `DefaultTimeout` = 5s);
@@ -84,6 +84,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   JSON-ключ для сообщений об ошибках (`{"error": ...}`).
 - `internal/storage/sqlc/` — сгенерированный код sqlc (не редактировать руками);
   схема — `schema/schema.sql`, запросы — `query/`, конфиг — `sqlc.yaml`.
+  Инструменты (`goose`, `sqlc`, ...) объявлены директивой `tool` в `go.mod` и
+  вызываются через `go tool`, а не отдельно установленными бинарниками.
 - `db/migrations/` — миграции goose (SQL, последовательная нумерация).
 - Новые самостоятельные сущности — отдельные пакеты
   `internal/service/<name>` (пакет называется по имени сущности, не
@@ -107,6 +109,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   из JSON-тегов DTO); некорректный JSON → `400 {"error": "invalid request"}`.
   Конфликт уникальности `short_name` → `422 {"errors": {"short_name":
   "short name already in use"}}` (маппится из sentinel `ErrShortNameTaken`).
+  Отсутствующий ресурс (GET/PUT/DELETE по несуществующему id) → `404
+  {"error": ...}` (из sentinel `ErrNotFound`; `DeleteLink` — `:execrows`).
   Превышение таймаута контекста (`context.DeadlineExceeded`) → `503
   {"error": ...}` (хелпер `httpapi.ServerError`), прочие ошибки БД → `500`.
 - НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
@@ -131,7 +135,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   `v3.27.3`), (3) runtime `alpine:3.22` (статический бинарник Caddy
   `v2.11.4` с GitHub Releases, goose из builder). См. также `bin/run.sh`:
   goose migrate-up → запуск Caddy в фоне → `exec /app/bin/server`.
-- Конфиг: `DATABASE_URL`, `BASE_SHORT_URL` (required), `SERVER_PORT` (default
+- Конфиг: `DATABASE_URL`, `BASE_URL` (required, origin без `/r`; short_url
+  собирается как `BASE_URL + "/r/" + short_name`), `SERVER_PORT` (default
   8080, внутренний порт Go-сервера), `CORS_ORIGIN` (default
   `http://localhost:5173`, можно переопределить под origin фронта в деплое).
   Порт Caddy (`PORT` на Render) задаётся в Caddyfile (`:80`) и НЕ должен
@@ -150,7 +155,8 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   **инклюзивный** диапазон
   (как у react-admin/`ra-data-simple-rest`): для `perPage=5` фронт шлёт
   `range=[0,4]`, бэкенд возвращает `limit = end-start+1` записей. Без
-  параметра `range` — дефолт 10 записей, максимум 100.
+  параметра `range` — дефолт 10 записей, при превышении — усечение до 100
+  (не ошибка).
   Ответ: JSON-массив + `Content-Range: links {start}-{end}/{total}` (или
   `link_visits ...`) — end последний индекс возвращённых записей.
 - Таблица `link_visits` (миграция `00002`): `link_id` на `links(id)` с
