@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -34,8 +33,7 @@ func ParseRangeParam(c *gin.Context) (offset, limit int32, ok bool) {
 
 	limit = end - start + 1
 	if limit > MaxLimit {
-		BadRequest(c, fmt.Sprintf("range exceeds max limit of %d", MaxLimit))
-		return 0, 0, false
+		limit = MaxLimit
 	}
 
 	return start, limit, true

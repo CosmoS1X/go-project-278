@@ -136,6 +136,10 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	if err := h.repo.Delete(c.Request.Context(), id); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			httpapi.NotFound(c, ErrNotFound.Error())
+			return
+		}
 		httpapi.ServerError(c, err, "failed to delete link")
 		return
 	}
@@ -169,7 +173,7 @@ func (h *Handler) toResponse(link Link) response {
 		ID:          link.ID,
 		OriginalURL: link.OriginalURL,
 		ShortName:   link.ShortName,
-		ShortURL:    fmt.Sprintf("%s/%s", h.baseURL, link.ShortName),
+		ShortURL:    fmt.Sprintf("%s/r/%s", h.baseURL, link.ShortName),
 		CreatedAt:   link.CreatedAt,
 	}
 }

@@ -4,13 +4,13 @@ MIGRATIONS_DIR := db/migrations
 -include .env
 
 sqlc-generate:
-	cd internal/storage/sqlc && sqlc generate
+	cd internal/storage/sqlc && go tool sqlc generate
 
 migrate-up:
-	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
+	go tool goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
 
 migrate-down:
-	goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" down
+	go tool goose -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" down
 
 tidy:
 	go mod tidy
@@ -19,7 +19,7 @@ fmt:
 	golangci-lint fmt
 
 build:
-	go build -o ./bin/server ./cmd/server
+	go build -o ./bin/server .
 
 run: build
 	./bin/server

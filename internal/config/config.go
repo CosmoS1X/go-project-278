@@ -7,10 +7,10 @@ import (
 )
 
 type Config struct {
-	DatabaseURL  string `env:"DATABASE_URL,required"`
-	BaseShortURL string `env:"BASE_SHORT_URL,required"`
-	Port         string `env:"SERVER_PORT" envDefault:"8080"`
-	CORSOrigin   string `env:"CORS_ORIGIN" envDefault:"http://localhost:5173"`
+	DatabaseURL string `env:"DATABASE_URL,required"`
+	BaseURL     string `env:"BASE_URL,required"`
+	Port        string `env:"SERVER_PORT" envDefault:"8080"`
+	CORSOrigin  string `env:"CORS_ORIGIN" envDefault:"http://localhost:5173"`
 }
 
 func Load() (*Config, error) {

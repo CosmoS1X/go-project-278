@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	envDatabaseURL  = "DATABASE_URL"
-	envBaseShortURL = "BASE_SHORT_URL"
-	envServerPort   = "SERVER_PORT"
-	envCORSOrigin   = "CORS_ORIGIN"
+	envDatabaseURL = "DATABASE_URL"
+	envBaseURL     = "BASE_URL"
+	envServerPort  = "SERVER_PORT"
+	envCORSOrigin  = "CORS_ORIGIN"
 
-	testDatabaseURL  = "postgres://localhost:5432/app"
-	testBaseShortURL = "https://sho.rt"
+	testDatabaseURL = "postgres://localhost:5432/app"
+	testBaseURL     = "https://sho.rt"
 )
 
 func unsetEnv(t *testing.T, key string) {
@@ -34,7 +34,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Helper()
 
 	t.Setenv(envDatabaseURL, testDatabaseURL)
-	t.Setenv(envBaseShortURL, testBaseShortURL)
+	t.Setenv(envBaseURL, testBaseURL)
 }
 
 func TestLoadDefaults(t *testing.T) {
@@ -46,7 +46,7 @@ func TestLoadDefaults(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, testDatabaseURL, cfg.DatabaseURL)
-	assert.Equal(t, testBaseShortURL, cfg.BaseShortURL)
+	assert.Equal(t, testBaseURL, cfg.BaseURL)
 	assert.Equal(t, "8080", cfg.Port)
 	assert.Equal(t, "http://localhost:5173", cfg.CORSOrigin)
 }

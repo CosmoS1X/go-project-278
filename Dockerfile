@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 RUN go install github.com/pressly/goose/v3/cmd/goose@v3.27.3
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    mkdir -p /out && CGO_ENABLED=0 go build -o /out/server ./cmd/server
+    mkdir -p /out && CGO_ENABLED=0 go build -o /out/server .
 
 # 3) Runtime
 FROM alpine:3.22

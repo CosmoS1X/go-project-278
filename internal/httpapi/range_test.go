@@ -88,8 +88,10 @@ func TestParseRangeParamEndBeforeStart(t *testing.T) {
 	assert.JSONEq(t, `{"error":"invalid range: start must be >= 0 and end must be >= start"}`, w.Body.String())
 }
 
-func TestParseRangeParamExceedsMaxLimit(t *testing.T) {
-	w := doRangeRequest(t, "/range?range=[0,100]")
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "range exceeds max limit of 100")
+func TestParseRangeParamClampsToMaxLimit(t *testing.T) {
+	w := doRangeRequest(t, "/range?range=[0,1000]")
+	require.Equal(t, http.StatusOK, w.Code)
+
+	assert.Contains(t, w.Body.String(), `"offset":0`)
+	assert.Contains(t, w.Body.String(), `"limit":100`)
 }
