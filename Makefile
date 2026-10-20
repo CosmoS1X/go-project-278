@@ -25,7 +25,7 @@ run: build
 	./bin/server
 
 clean:
-	rm -rf ./bin/server coverage.out coverage.html
+	rm -rf ./bin/server coverage.out coverage.html ./tmp
 
 test:
 	go test -v ./...
