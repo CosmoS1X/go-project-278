@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/CosmoS1X/go-project-278/internal/httpapi"
+	"github.com/CosmoS1X/url-shortener/internal/httpapi"
 )
 
 type Handler struct {

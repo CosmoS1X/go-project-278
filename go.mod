@@ -1,4 +1,4 @@
-module github.com/CosmoS1X/go-project-278
+module github.com/CosmoS1X/url-shortener
 
 go 1.26.7
 

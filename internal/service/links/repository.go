@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
+	"github.com/CosmoS1X/url-shortener/internal/storage/sqlc"
 )
 
 type Repository interface {

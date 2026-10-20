@@ -2,8 +2,7 @@
 
 ## О проекте
 
-Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-278` (временное
-имя — к релизу заменится; массовых переименований сейчас не делать).
+Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/url-shortener`.
 
 - Язык: Go 1.26.x, фреймворк gin v1.12, тесты testify.
 - СУБД: PostgreSQL. Доступ к данным: sqlc (SQL как источник истины,
@@ -113,7 +112,6 @@ Go-веб-сервис на Gin. Модуль: `github.com/CosmoS1X/go-project-2
   {"error": ...}` (из sentinel `ErrNotFound`; `DeleteLink` — `:execrows`).
   Превышение таймаута контекста (`context.DeadlineExceeded`) → `503
   {"error": ...}` (хелпер `httpapi.ServerError`), прочие ошибки БД → `500`.
-- НЕ редактировать `.github/workflows/hexlet-check.yml` (автогенерируется).
 
 ## Фронтенд и деплой
 

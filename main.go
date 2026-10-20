@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 
-	"github.com/CosmoS1X/go-project-278/internal/app"
-	"github.com/CosmoS1X/go-project-278/internal/config"
+	"github.com/CosmoS1X/url-shortener/internal/app"
+	"github.com/CosmoS1X/url-shortener/internal/config"
 )
 
 func main() {

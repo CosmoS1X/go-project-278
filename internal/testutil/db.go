@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/CosmoS1X/go-project-278/internal/storage/sqlc"
+	"github.com/CosmoS1X/url-shortener/internal/storage/sqlc"
 )
 
 func NewClosedDB(t *testing.T) *sql.DB {
